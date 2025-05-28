@@ -189,18 +189,23 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
           return;
         }
       }
+        // Check if user has enough balance before sending
+      const hasBalance = await contractService.hasEnoughBalance(amount);
+      if (!hasBalance) {
+        throw new Error("Insufficient balance for this transaction (including gas)");
+      }
       
-      // Use the secure transfer function
-      const tx = await contractService.secureSendETH(recipient, amount);
-      setTxHash(tx.hash);
-      
-      // Wait for transaction to be mined
-      await tx.wait();
+      // Use the standalone function for secure transfer
+      const hash = await sendTransaction(recipient, amount);
+      setTxHash(hash);
       
       // Clear form and update balance
       setRecipient('');
       setAmount('');
-      setTxHash(null);
+      
+      // Set a timeout to clear the transaction hash display after a few seconds
+      setTimeout(() => setTxHash(null), 5000);
+      
       await updateBalance();
     } catch (err: any) {
       console.error("Transaction error:", err);
@@ -209,8 +214,7 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
       setIsSending(false);
     }
   };
-  
-  // Handle report scam submission
+    // Handle report scam submission
   const handleReportScam = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -222,6 +226,12 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
     try {
       setIsReporting(true);
       setError(null);
+      
+      // First verify contract is valid
+      const isContractValid = await contractService.verifyContract();
+      if (!isContractValid) {
+        throw new Error("Cannot connect to the contract. Please check your network connection.");
+      }
       
       const hash = await reportScam(scamAddress, scamReason);
       setTxHash(hash);
@@ -239,8 +249,7 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
       setIsReporting(false);
     }
   };
-  
-  // Handle vote submission
+    // Handle vote submission
   const handleVote = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -252,6 +261,18 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
     try {
       setIsVoting(true);
       setError(null);
+      
+      // First verify contract is valid
+      const isContractValid = await contractService.verifyContract();
+      if (!isContractValid) {
+        throw new Error("Cannot connect to the contract. Please check your network connection.");
+      }
+      
+      // Show confirmation dialog
+      if (!window.confirm(`Are you sure you want to vote ${voteSupport ? 'IN SUPPORT OF' : 'AGAINST'} proposal ${proposalId}?`)) {
+        setIsVoting(false);
+        return;
+      }
       
       const hash = await voteOnProposal(proposalId, voteSupport);
       setTxHash(hash);

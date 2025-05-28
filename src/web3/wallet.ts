@@ -2,6 +2,61 @@
 // Handles connecting to MetaMask and other Ethereum wallet providers
 
 import { ethers, BrowserProvider, Signer, formatUnits, parseUnits, Contract } from 'ethers';
+import { NETWORK_INFO, isMonadNetwork } from './utils';
+
+/**
+ * Simple functions for basic wallet connection
+ * These are exported separately for simpler use in components
+ */
+
+/**
+ * Switch to Monad testnet
+ * @returns {Promise<boolean>} True if successful
+ */
+export const switchToMonadNetwork = async (): Promise<boolean> => {
+  if (!window.ethereum) {
+    alert("Please install MetaMask!");
+    return false;
+  }
+
+  try {
+    // Try to switch to Monad testnet
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: '0x7E7' }], // 2023 in hex
+    });
+    return true;
+  } catch (error: any) {
+    // This error code indicates that the chain has not been added to MetaMask
+    if (error.code === 4902) {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [
+            {
+              chainId: '0x7E7', // 2023 in hex
+              chainName: 'Monad Testnet',
+              nativeCurrency: {
+                name: 'MONAD',
+                symbol: 'MONAD',
+                decimals: 18,
+              },
+              rpcUrls: ['https://rpc.testnet.monad.xyz'],
+              blockExplorerUrls: ['https://explorer.testnet.monad.xyz'],
+            },
+          ],
+        });
+        return true;
+      } catch (addError) {
+        console.error("Error adding Monad network:", addError);
+        return false;
+      }
+    } else {
+      console.error("Error switching to Monad network:", error);
+      return false;
+    }
+  }
+}
 
 /**
  * Simple functions for basic wallet connection
@@ -10,9 +65,10 @@ import { ethers, BrowserProvider, Signer, formatUnits, parseUnits, Contract } fr
 
 /**
  * Connect to MetaMask wallet
+ * @param {boolean} preferMonad - Whether to switch to Monad after connecting
  * @returns {Promise<string|null>} Connected wallet address or null if failed
  */
-export const connectWallet = async (): Promise<string | null> => {
+export const connectWallet = async (preferMonad: boolean = true): Promise<string | null> => {
   if (!window.ethereum) {
     alert("Please install MetaMask!");
     return null;
@@ -20,6 +76,15 @@ export const connectWallet = async (): Promise<string | null> => {
 
   try {
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    
+    // If preferMonad is true, switch to Monad network after connecting
+    if (preferMonad) {
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      if (!isMonadNetwork(chainId)) {
+        await switchToMonadNetwork();
+      }
+    }
+    
     return accounts[0];
   } catch (error) {
     console.error("Error connecting to wallet:", error);

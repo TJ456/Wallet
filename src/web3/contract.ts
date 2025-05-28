@@ -168,4 +168,51 @@ class ContractService {
 // Create a singleton instance
 const contractService = new ContractService();
 
+// Standalone functions for Step 6
+
+/**
+ * Get a contract instance
+ * @returns {Promise<Contract>} Contract instance
+ */
+export const getContract = async (): Promise<Contract> => {
+  return contractService.getContract();
+};
+
+/**
+ * Send ETH securely
+ * @param to Recipient address
+ * @param amountEth Amount in ETH
+ * @returns Transaction hash
+ */
+export const sendTransaction = async (to: string, amountEth: string): Promise<string> => {
+  const tx = await contractService.secureSendETH(to, amountEth);
+  await tx.wait();
+  return tx.hash;
+};
+
+/**
+ * Report scammer
+ * @param scammer Address to report
+ * @param reason Reason for the report
+ * @param evidence Evidence URL or documentation (optional)
+ * @returns Transaction hash
+ */
+export const reportScam = async (scammer: string, reason: string, evidence: string = ""): Promise<string> => {
+  const tx = await contractService.reportScam(scammer, reason, evidence);
+  await tx.wait();
+  return tx.hash;
+};
+
+/**
+ * Vote on a proposal
+ * @param proposalId ID of the proposal
+ * @param inSupport Whether to vote in support
+ * @returns Transaction hash
+ */
+export const voteOnProposal = async (proposalId: string, inSupport: boolean): Promise<string> => {
+  const tx = await contractService.voteOnScamReport(proposalId, inSupport);
+  await tx.wait();
+  return tx.hash;
+};
+
 export default contractService;

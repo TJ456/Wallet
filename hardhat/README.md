@@ -149,6 +149,30 @@ The UnhackableWallet smart contract provides the following features:
 
 ## Troubleshooting
 
-- **Transaction Reverted**: Check that you have enough native tokens (ETH, MATIC) for gas
+### Private Key Issues
+
+If you encounter errors related to your private key, use our validation tool:
+
+```powershell
+npm run validate:key
+```
+
+This tool will check your private key format and help diagnose common issues. To automatically attempt to fix private key issues:
+
+```powershell
+npm run fix:key
+```
+
+Common private key errors and their solutions:
+
+- **"Invalid account: #0 - private key too short, expected 32 bytes"**: Your private key must be exactly 64 hexadecimal characters (without the 0x prefix). Make sure you've copied the entire private key.
+
+- **"Cannot read properties of undefined (reading 'wait')"**: This typically means your private key is invalid or you don't have enough funds on the account.
+
+For complete instructions on managing private keys, see [MONAD_STEP_BY_STEP.md](./MONAD_STEP_BY_STEP.md).
+
+### Other Common Issues
+
+- **Transaction Reverted**: Check that you have enough native tokens (ETH, MATIC, MONAD) for gas
 - **Contract Not Found**: Verify the contract address in `src/web3/contract.ts`
 - **Network Mismatch**: Make sure you're connected to the same network where the contract is deployed

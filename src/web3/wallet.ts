@@ -1,0 +1,270 @@
+// Web3 Wallet Connection Module for UnhackableWallet
+// Handles connecting to MetaMask and other Ethereum wallet providers
+
+import { ethers, BrowserProvider, Signer, formatUnits, parseUnits, Contract } from 'ethers';
+
+/**
+ * Wallet connection class for handling Ethereum wallet interactions
+ */
+class WalletConnector {
+  provider: BrowserProvider | null;
+  signer: Signer | null;
+  address: string | null;
+  chainId: number | null;
+  networkName: string | null;
+  
+  // Event handlers
+  private _handleAccountsChanged: ((accounts: string[]) => void) | null;
+  private _handleChainChanged: ((chainId: string) => void) | null;
+  private _handleDisconnect: ((error: any) => void) | null;
+
+  constructor() {
+    this.provider = null;
+    this.signer = null;
+    this.address = null;
+    this.chainId = null;
+    this.networkName = null;
+    
+    // Initialize event handlers as null
+    this._handleAccountsChanged = null;
+    this._handleChainChanged = null;
+    this._handleDisconnect = null;
+  }
+
+  /**
+   * Check if MetaMask is installed
+   * @returns {boolean} True if MetaMask is installed
+   */
+  isMetaMaskInstalled(): boolean {
+    return typeof window !== 'undefined' && window.ethereum !== undefined;
+  }
+  /**
+   * Connect to wallet (MetaMask)
+   * @returns {Promise<string>} Connected wallet address
+   */
+  async connect(): Promise<string> {
+    if (!this.isMetaMaskInstalled()) {
+      throw new Error("MetaMask is not installed. Please install MetaMask browser extension.");
+    }
+
+    try {
+      // Request account access
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
+      if (accounts.length === 0) {
+        throw new Error("No accounts found. Please unlock your MetaMask wallet.");
+      }
+
+      // Get provider, signer and address
+      this.provider = new BrowserProvider(window.ethereum);
+      this.signer = await this.provider.getSigner();
+      this.address = accounts[0];
+      
+      // Get network information
+      const network = await this.provider.getNetwork();
+      this.chainId = Number(network.chainId);
+      this.networkName = this.getNetworkName(Number(network.chainId));
+
+      // Set up event listeners
+      this._setupEventListeners();
+      
+      return this.address;
+    } catch (error) {
+      console.error("Failed to connect wallet:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Disconnect from the wallet (clear state)
+   */
+  disconnect(): void {
+    this.provider = null;
+    this.signer = null;
+    this.address = null;
+    this.chainId = null;
+    this.networkName = null;
+    
+    // Remove event listeners if needed
+    if (window.ethereum) {
+      if (this._handleAccountsChanged) {
+        window.ethereum.removeListener('accountsChanged', this._handleAccountsChanged);
+      }
+      if (this._handleChainChanged) {
+        window.ethereum.removeListener('chainChanged', this._handleChainChanged);
+      }
+      if (this._handleDisconnect) {
+        window.ethereum.removeListener('disconnect', this._handleDisconnect);
+      }
+    }
+  }
+  /**
+   * Get wallet balance in ETH
+   * @returns {Promise<string>} Balance formatted in ETH
+   */
+  async getBalance(): Promise<string> {
+    if (!this.signer || !this.address) {
+      throw new Error("Wallet not connected");
+    }
+    
+    const balance = await this.provider!.getBalance(this.address);
+    return formatUnits(balance, 18);
+  }
+
+  /**
+   * Get token balance for an ERC20 token
+   * @param {string} tokenAddress - The ERC20 token contract address
+   * @returns {Promise<string>} Token balance formatted with decimals
+   */  async getTokenBalance(tokenAddress: string): Promise<string> {
+    if (!this.signer || !this.address) {
+      throw new Error("Wallet not connected");
+    }
+
+    // ERC20 standard ABI for balanceOf function
+    const minABI = [
+      {
+        constant: true,
+        inputs: [{ name: "_owner", type: "address" }],
+        name: "balanceOf",
+        outputs: [{ name: "balance", type: "uint256" }],
+        type: "function",
+      },
+      {
+        constant: true,
+        inputs: [],
+        name: "decimals",
+        outputs: [{ name: "", type: "uint8" }],
+        type: "function",
+      }
+    ];
+
+    const tokenContract = new Contract(tokenAddress, minABI, this.provider!);
+    const balance = await tokenContract.balanceOf(this.address);
+    const decimals = await tokenContract.decimals();
+    
+    return formatUnits(balance, decimals);
+  }
+
+  /**
+   * Sign a message with the connected wallet
+   * @param {string} message - Message to sign
+   * @returns {Promise<string>} Signed message signature
+   */
+  async signMessage(message: string): Promise<string> {
+    if (!this.signer) {
+      throw new Error("Wallet not connected");
+    }
+    
+    return await this.signer.signMessage(message);
+  }
+
+  /**
+   * Switch to a different Ethereum network
+   * @param {number|string} chainId - Chain ID to switch to (in hex or decimal)
+   */
+  async switchNetwork(chainId: number | string): Promise<void> {
+    if (!this.provider) {
+      throw new Error("Wallet not connected");
+    }
+    
+    // Convert to hex format if it's a number
+    const chainIdHex = typeof chainId === 'number' 
+      ? `0x${chainId.toString(16)}` 
+      : chainId;
+    
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: chainIdHex }],
+      });
+    } catch (error: any) {
+      // This error code means the chain has not been added to MetaMask
+      if (error.code === 4902) {
+        throw new Error("This network is not available in your MetaMask, please add it first");
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get friendly name for Ethereum network
+   * @param {number} chainId - Network Chain ID
+   * @returns {string} Network name
+   */
+  getNetworkName(chainId: number): string {
+    const networks: Record<number, string> = {
+      1: "Ethereum Mainnet",
+      3: "Ropsten Testnet",
+      4: "Rinkeby Testnet",
+      5: "Goerli Testnet",
+      42: "Kovan Testnet",
+      56: "BSC Mainnet",
+      97: "BSC Testnet",
+      137: "Polygon Mainnet",
+      80001: "Polygon Mumbai",
+      43114: "Avalanche C-Chain",
+      43113: "Avalanche Fuji Testnet",
+      42161: "Arbitrum One",
+      421613: "Arbitrum Goerli",
+      10: "Optimism",
+      420: "Optimism Goerli",
+      // Add more networks as needed
+    };
+    
+    return networks[chainId] || `Unknown Network (${chainId})`;
+  }
+
+  /**
+   * Setup event listeners for MetaMask events
+   * @private
+   */
+  _setupEventListeners(): void {
+    if (!window.ethereum) return;
+
+    // Handle account changes
+    this._handleAccountsChanged = (accounts: string[]) => {
+      if (accounts.length === 0) {
+        // User disconnected their wallet
+        this.disconnect();
+        window.dispatchEvent(new CustomEvent('wallet_disconnected'));
+      } else if (accounts[0] !== this.address) {
+        // User switched accounts
+        this.address = accounts[0];
+        window.dispatchEvent(new CustomEvent('wallet_accountChanged', { 
+          detail: { address: this.address } 
+        }));
+      }
+    };
+
+    // Handle chain/network changes
+    this._handleChainChanged = (chainId: string) => {
+      // Need to reload the page as recommended by MetaMask
+      window.location.reload();
+    };
+
+    // Handle disconnect
+    this._handleDisconnect = (error: any) => {
+      this.disconnect();
+      window.dispatchEvent(new CustomEvent('wallet_disconnected', { 
+        detail: { error } 
+      }));
+    };
+
+    // Add event listeners
+    window.ethereum.on('accountsChanged', this._handleAccountsChanged);
+    window.ethereum.on('chainChanged', this._handleChainChanged);
+    window.ethereum.on('disconnect', this._handleDisconnect);
+  }
+}
+
+// Create a singleton instance
+const walletConnector = new WalletConnector();
+
+export default walletConnector;
+
+// Add TypeScript declarations for Ethereum provider in window object
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}

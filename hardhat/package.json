@@ -7,8 +7,11 @@
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
     "deploy:goerli": "hardhat run scripts/deploy.ts --network goerli",
     "deploy:mumbai": "hardhat run scripts/deploy.ts --network mumbai",
+    "deploy:monad": "hardhat run scripts/deploy.ts --network monad_testnet",
     "verify": "hardhat verify --network",
-    "extract-abi": "node scripts/extract-abi.js"
+    "verify:monad": "hardhat verify --network monad_testnet",
+    "extract-abi": "node scripts/extract-abi.js",
+    "test:monad": "CONTRACT_ADDRESS=your_contract_address hardhat run scripts/test-monad-deployment.js --network monad_testnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

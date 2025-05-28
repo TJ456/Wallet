@@ -84,6 +84,12 @@ Or deploy to Mumbai (Polygon testnet):
 npm run deploy:mumbai
 ```
 
+Or deploy to Monad testnet:
+
+```bash
+npm run deploy:monad
+```
+
 ### Update Frontend Contract Addresses
 
 After deploying, update the contract address in the frontend:
@@ -104,13 +110,20 @@ Network IDs:
 - Sepolia: 11155111
 - Polygon Mainnet: 137
 - Mumbai: 80001
+- Monad Testnet: 2023
 
-## Verify Contract on Etherscan/Polygonscan
+## Verify Contract on Blockchain Explorers
 
 Verify the contract on the blockchain explorer:
 
+For Ethereum testnets (Sepolia, Goerli):
 ```bash
 npx hardhat verify --network sepolia <contract-address>
+```
+
+For Monad testnet:
+```bash
+npm run verify:monad <contract-address>
 ```
 
 ## Testing

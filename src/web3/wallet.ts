@@ -4,7 +4,57 @@
 import { ethers, BrowserProvider, Signer, formatUnits, parseUnits, Contract } from 'ethers';
 
 /**
+ * Simple functions for basic wallet connection
+ * These are exported separately for simpler use in components
+ */
+
+/**
+ * Connect to MetaMask wallet
+ * @returns {Promise<string|null>} Connected wallet address or null if failed
+ */
+export const connectWallet = async (): Promise<string | null> => {
+  if (!window.ethereum) {
+    alert("Please install MetaMask!");
+    return null;
+  }
+
+  try {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    return accounts[0];
+  } catch (error) {
+    console.error("Error connecting to wallet:", error);
+    return null;
+  }
+};
+
+/**
+ * Get provider for reading blockchain data
+ * @returns {BrowserProvider|null} Ethers provider or null if MetaMask not available
+ */
+export const getProvider = (): BrowserProvider | null => {
+  if (!window.ethereum) return null;
+  return new BrowserProvider(window.ethereum);
+};
+
+/**
+ * Get signer for transactions
+ * @returns {Promise<Signer|null>} Ethers signer or null if connection fails
+ */
+export const getSigner = async (): Promise<Signer | null> => {
+  const provider = getProvider();
+  if (!provider) return null;
+  
+  try {
+    return await provider.getSigner();
+  } catch (error) {
+    console.error("Error getting signer:", error);
+    return null;
+  }
+};
+
+/**
  * Wallet connection class for handling Ethereum wallet interactions
+ * This class provides more advanced functionality and state management
  */
 class WalletConnector {
   provider: BrowserProvider | null;

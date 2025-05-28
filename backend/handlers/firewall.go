@@ -4,6 +4,7 @@ import (
 	"Wallet/backend/models"
 	"Wallet/backend/services"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -16,10 +17,10 @@ type FirewallHandler struct {
 }
 
 // NewFirewallHandler creates a new firewall handler
-func NewFirewallHandler(db *gorm.DB) *FirewallHandler {
+func NewFirewallHandler(db *gorm.DB, aiService *services.AIService) *FirewallHandler {
 	return &FirewallHandler{
 		db: db,
-		aiService: services.NewAIService(),
+		aiService: aiService,
 	}
 }
 
@@ -78,12 +79,15 @@ func (h *FirewallHandler) GetStats(c *gin.Context) {
 
 // GetTransactions returns transaction history for a wallet address
 func (h *FirewallHandler) GetTransactions(c *gin.Context) {
-	walletAddress := c.Query("address")
-	if walletAddress == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Wallet address is required"})
+	// Get address from Web3 auth middleware
+	address, exists := c.Get("address")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 		return
 	}
-
+	
+	walletAddress := address.(string)
+	
 	var transactions []models.Transaction
 	result := h.db.Where("from_address = ? OR to_address = ?", walletAddress, walletAddress).
 		Order("created_at DESC").
@@ -96,4 +100,39 @@ func (h *FirewallHandler) GetTransactions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, transactions)
+}
+
+// GetAdminStats returns detailed statistics for admin dashboard
+func (h *FirewallHandler) GetAdminStats(c *gin.Context) {
+	// Get various statistics
+	var stats struct {
+		TotalTransactions int64 `json:"totalTransactions"`
+		BlockedTransactions int64 `json:"blockedTransactions"`
+		SuspiciousTransactions int64 `json:"suspiciousTransactions"`
+		SafeTransactions int64 `json:"safeTransactions"`
+		TotalReports int64 `json:"totalReports"`
+		VerifiedReports int64 `json:"verifiedReports"`
+		UniqueAddressesReported int64 `json:"uniqueAddressesReported"`
+		LastDayTransactions int64 `json:"lastDayTransactions"`
+	}
+	
+	// Count different transaction types
+	h.db.Model(&models.Transaction{}).Count(&stats.TotalTransactions)
+	h.db.Model(&models.Transaction{}).Where("status = ?", "blocked").Count(&stats.BlockedTransactions)
+	h.db.Model(&models.Transaction{}).Where("status = ?", "suspicious").Count(&stats.SuspiciousTransactions)
+	h.db.Model(&models.Transaction{}).Where("status = ?", "safe").Count(&stats.SafeTransactions)
+	
+	// Count reports
+	h.db.Model(&models.Report{}).Count(&stats.TotalReports)
+	h.db.Model(&models.Report{}).Where("status = ?", "verified").Count(&stats.VerifiedReports)
+	
+	// Count unique reported addresses
+	h.db.Model(&models.Report{}).Distinct("reported_address").Count(&stats.UniqueAddressesReported)
+	
+	// Count transactions in the last 24 hours
+	yesterday := time.Now().Add(-24 * time.Hour)
+	h.db.Model(&models.Transaction{}).Where("created_at > ?", yesterday).Count(&stats.LastDayTransactions)
+	
+	// Return all stats
+	c.JSON(http.StatusOK, stats)
 }

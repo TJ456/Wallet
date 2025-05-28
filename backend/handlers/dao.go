@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"Wallet/backend/models"
+	"Wallet/backend/services"
 	"net/http"
 	"time"
 
@@ -12,12 +13,14 @@ import (
 // DAOHandler handles DAO voting endpoints
 type DAOHandler struct {
 	db *gorm.DB
+	blockchainService *services.BlockchainService
 }
 
 // NewDAOHandler creates a new DAO handler
-func NewDAOHandler(db *gorm.DB) *DAOHandler {
+func NewDAOHandler(db *gorm.DB, blockchainService *services.BlockchainService) *DAOHandler {
 	return &DAOHandler{
 		db: db,
+		blockchainService: blockchainService,
 	}
 }
 

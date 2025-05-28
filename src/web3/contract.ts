@@ -9,10 +9,10 @@ import { shortenAddress } from './utils';
 // Contract addresses - can be moved to environment variables later
 const CONTRACT_ADDRESSES = {
   // Use appropriate address for each network
-  '1': '0x...', // Mainnet
-  '5': '0x...', // Goerli testnet
-  '11155111': '0x...', // Sepolia testnet
-  '2023': '0x...', // Monad testnet
+  '1': '0x0000000000000000000000000000000000000000', // Mainnet - replace with actual address when deployed
+  '5': '0x0000000000000000000000000000000000000000', // Goerli testnet - replace with actual address when deployed
+  '11155111': '0x0000000000000000000000000000000000000000', // Sepolia testnet - replace with actual address when deployed
+  '2023': '0x7A791FE5A35131B7D98F854A64e7F94180F27C7B', // Monad testnet address
   // Add more networks as needed
 };
 

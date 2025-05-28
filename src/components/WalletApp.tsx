@@ -18,6 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import walletConnector from '@/web3/wallet';
 import contractService from '@/web3/contract';
 import { shortenAddress, isValidAddress, formatEth } from '@/web3/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { reportScam, voteOnProposal, sendTransaction } from '@/web3/contract';
 
 interface WalletAppProps {
   onAddressChanged?: (address: string | null) => void;
@@ -39,6 +41,16 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
   // State for security checks
   const [isSafe, setIsSafe] = useState<boolean>(true);
   const [scamScore, setScamScore] = useState<number>(0);
+  
+  // State for scam reporting
+  const [scamAddress, setScamAddress] = useState<string>('');
+  const [scamReason, setScamReason] = useState<string>('');
+  const [isReporting, setIsReporting] = useState<boolean>(false);
+  
+  // State for voting
+  const [proposalId, setProposalId] = useState<string>('');
+  const [voteSupport, setVoteSupport] = useState<boolean>(true);
+  const [isVoting, setIsVoting] = useState<boolean>(false);
   
   // Connect wallet on component mount if previously connected
   useEffect(() => {
@@ -198,6 +210,65 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
     }
   };
   
+  // Handle report scam submission
+  const handleReportScam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!address || !isValidAddress(scamAddress) || !scamReason) {
+      setError("Please enter a valid address and reason");
+      return;
+    }
+    
+    try {
+      setIsReporting(true);
+      setError(null);
+      
+      const hash = await reportScam(scamAddress, scamReason);
+      setTxHash(hash);
+      
+      // Clear form
+      setScamAddress('');
+      setScamReason('');
+      
+      // Set success message
+      setTimeout(() => setTxHash(null), 5000);
+    } catch (err: any) {
+      console.error("Report error:", err);
+      setError(err.message);
+    } finally {
+      setIsReporting(false);
+    }
+  };
+  
+  // Handle vote submission
+  const handleVote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!address || !proposalId) {
+      setError("Please enter a valid proposal ID");
+      return;
+    }
+    
+    try {
+      setIsVoting(true);
+      setError(null);
+      
+      const hash = await voteOnProposal(proposalId, voteSupport);
+      setTxHash(hash);
+      
+      // Clear form
+      setProposalId('');
+      
+      // Set success message
+      setTimeout(() => setTxHash(null), 5000);
+    } catch (err: any) {
+      console.error("Vote error:", err);
+      setError(err.message);
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
   // Render safety warning badge
   const renderSafetyBadge = () => {
     if (!recipient || recipient.length < 30) return null;
@@ -252,49 +323,139 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
               </div>
             </div>
             
-            <form onSubmit={handleSendTransaction}>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="recipient">Recipient Address</Label>
-                  <Input
-                    id="recipient"
-                    placeholder="0x..."
-                    value={recipient}
-                    onChange={handleRecipientChange}
-                    required
-                  />
-                  <div className="h-6">{renderSafetyBadge()}</div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Amount (ETH)</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.0001"
-                    min="0"
-                    placeholder="0.0"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    required
-                  />
-                </div>
-                
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={isSending}
-                >
-                  {isSending ? "Sending..." : "Send Transaction"}
-                </Button>
-                
-                {txHash && (
-                  <p className="text-sm text-center mt-2">
-                    Transaction submitted: {shortenAddress(txHash, 6)}
-                  </p>
-                )}
-              </div>
-            </form>
+            <Tabs defaultValue="send" className="mt-4">
+              <TabsList className="grid grid-cols-3 mb-4">
+                <TabsTrigger value="send">Send</TabsTrigger>
+                <TabsTrigger value="report">Report</TabsTrigger>
+                <TabsTrigger value="vote">Vote</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="send">
+                <form onSubmit={handleSendTransaction}>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="recipient">Recipient Address</Label>
+                      <Input
+                        id="recipient"
+                        placeholder="0x..."
+                        value={recipient}
+                        onChange={handleRecipientChange}
+                        required
+                      />
+                      <div className="h-6">{renderSafetyBadge()}</div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Amount (ETH)</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        placeholder="0.0"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        required
+                      />
+                    </div>
+                    
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isSending}
+                    >
+                      {isSending ? "Sending..." : "Send Transaction"}
+                    </Button>
+                  </div>
+                </form>
+              </TabsContent>
+              
+              <TabsContent value="report">
+                <form onSubmit={handleReportScam}>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="scamAddress">Scammer Address</Label>
+                      <Input
+                        id="scamAddress"
+                        placeholder="0x..."
+                        value={scamAddress}
+                        onChange={(e) => setScamAddress(e.target.value)}
+                        required
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="scamReason">Reason</Label>
+                      <Input
+                        id="scamReason"
+                        placeholder="Describe the scam..."
+                        value={scamReason}
+                        onChange={(e) => setScamReason(e.target.value)}
+                        required
+                      />
+                    </div>
+                    
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isReporting}
+                    >
+                      {isReporting ? "Reporting..." : "Report Scammer"}
+                    </Button>
+                  </div>
+                </form>
+              </TabsContent>
+              
+              <TabsContent value="vote">
+                <form onSubmit={handleVote}>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="proposalId">Proposal ID</Label>
+                      <Input
+                        id="proposalId"
+                        placeholder="Proposal ID or Hash"
+                        value={proposalId}
+                        onChange={(e) => setProposalId(e.target.value)}
+                        required
+                      />
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Button 
+                        type="button" 
+                        variant={voteSupport ? "default" : "outline"}
+                        onClick={() => setVoteSupport(true)}
+                        className="flex-1"
+                      >
+                        Support
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant={!voteSupport ? "default" : "outline"}
+                        onClick={() => setVoteSupport(false)}
+                        className="flex-1"
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                    
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isVoting}
+                    >
+                      {isVoting ? "Voting..." : "Submit Vote"}
+                    </Button>
+                  </div>
+                </form>
+              </TabsContent>
+            </Tabs>
+            
+            {txHash && (
+              <p className="text-sm text-center mt-4">
+                Transaction submitted: {shortenAddress(txHash, 6)}
+              </p>
+            )}
           </>
         )}
       </CardContent>

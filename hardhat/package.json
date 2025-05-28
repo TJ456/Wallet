@@ -11,7 +11,10 @@
     "verify": "hardhat verify --network",
     "verify:monad": "hardhat verify --network monad_testnet",
     "extract-abi": "node scripts/extract-abi.js",
-    "test:monad": "CONTRACT_ADDRESS=your_contract_address hardhat run scripts/test-monad-deployment.js --network monad_testnet"
+    "test:monad": "hardhat run scripts/test-monad-deployment.js --network monad_testnet",
+    "monad:workflow": "node scripts/monad-deploy-workflow.js",
+    "validate:key": "node scripts/validate-private-key.js",
+    "fix:key": "node scripts/validate-private-key.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

@@ -4,8 +4,14 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Helper to format private key correctly - adds 0x prefix if needed
+function formatPrivateKey(key: string | undefined): string {
+  if (!key) return "0x0000000000000000000000000000000000000000000000000000000000000000";
+  return key.startsWith("0x") ? key : `0x${key}`;
+}
+
 // Get private key from .env file or use a default one for testing (never use this in production!)
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000000";
+const PRIVATE_KEY = formatPrivateKey(process.env.PRIVATE_KEY);
 // API keys for blockchain explorers
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 const POLYGONSCAN_API_KEY = process.env.POLYGONSCAN_API_KEY || "";

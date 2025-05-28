@@ -39,8 +39,10 @@ cp .env.example .env
 
 ```
 MONAD_RPC_URL=https://rpc.testnet.monad.xyz
-PRIVATE_KEY=your_private_key_without_0x_prefix
+PRIVATE_KEY=your_private_key_here
 ```
+
+> **Note**: Your private key must be 32 bytes (64 hexadecimal characters). You can include or omit the '0x' prefix - the system handles both formats.
 
 ## Deploying to Monad Testnet
 

@@ -11,11 +11,10 @@ contract UnhackableWallet {
     // Events
     event ScamReported(address indexed reporter, address indexed suspiciousAddress, string description);
     event VoteCast(address indexed voter, bytes32 indexed proposalId, bool inSupport);
-    event SecureTransfer(address indexed from, address indexed to, uint256 amount, bool safe);
-
-    // Structures
+    event SecureTransfer(address indexed from, address indexed to, uint256 amount, bool safe);    // Structures
     struct Report {
         address reporter;
+        address suspiciousAddress; // Address being reported
         string reason;
         string evidence;  // URL or IPFS hash for evidence
         uint timestamp;
@@ -36,6 +35,9 @@ contract UnhackableWallet {
     mapping(address => bool) public confirmedScammers;
     mapping(address => uint256) public scamScore; // 0-100 score for addresses
     
+    // All reports in sequential array for index-based access
+    Report[] private allReports;
+    
     // Total report count for analytics
     uint public totalReports;
 
@@ -52,9 +54,7 @@ contract UnhackableWallet {
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can perform this action");
         _;
-    }
-
-    /**
+    }    /**
      * @dev Report a suspicious address as potential scam
      * @param scammer The suspicious address to report
      * @param reason Description of the scam activity
@@ -64,8 +64,8 @@ contract UnhackableWallet {
         require(scammer != address(0), "Invalid address");
         require(bytes(reason).length > 0, "Reason cannot be empty");
         
-        // Create and store the report
-        reports[scammer].push(Report({
+        // Create a new report for the mapping
+        Report memory newReport = Report({
             reporter: msg.sender,
             reason: reason,
             evidence: evidence,
@@ -73,7 +73,25 @@ contract UnhackableWallet {
             votesFor: 0,
             votesAgainst: 0,
             confirmed: false
-        }));
+        });
+        
+        // Create an enhanced report for the sequential array
+        EnhancedReport memory enhancedReport = EnhancedReport({
+            reporter: msg.sender,
+            suspiciousAddress: scammer,
+            reason: reason,
+            evidence: evidence,
+            timestamp: block.timestamp,
+            votesFor: 0,
+            votesAgainst: 0,
+            confirmed: false
+        });
+        
+        // Store the report in the mapping
+        reports[scammer].push(newReport);
+        
+        // Also add to sequential array for index-based access
+        allReports.push(enhancedReport);
         
         totalReports++;
         
@@ -100,7 +118,20 @@ contract UnhackableWallet {
      */
     function getReportCount() external view returns (uint) {
         return totalReports;
+    }    // Enhanced Report structure to store suspicious address
+    struct EnhancedReport {
+        address reporter;
+        address suspiciousAddress;  // Store the reported address
+        string reason;
+        string evidence;  // URL or IPFS hash for evidence
+        uint timestamp;
+        uint votesFor;
+        uint votesAgainst;
+        bool confirmed;   // True if confirmed as scam by DAO
     }
+    
+    // Track all reports in a sequential array for getReport function
+    EnhancedReport[] private allReports;
     
     /**
      * @dev Get a specific report by index
@@ -119,17 +150,16 @@ contract UnhackableWallet {
     ) {
         require(index < totalReports, "Report index out of bounds");
         
-        // Implementation would require tracking reports in an array
-        // This is a placeholder for the interface
+        EnhancedReport storage report = allReports[index];
         return (
-            address(0),
-            address(0),
-            "",
-            "",
-            0,
-            0,
-            0,
-            false
+            report.reporter,
+            report.suspiciousAddress,
+            report.reason,
+            report.evidence,
+            report.timestamp,
+            report.votesFor,
+            report.votesAgainst,
+            report.confirmed
         );
     }
 

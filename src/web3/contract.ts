@@ -12,6 +12,7 @@ const CONTRACT_ADDRESSES = {
   '1': '0x...', // Mainnet
   '5': '0x...', // Goerli testnet
   '11155111': '0x...', // Sepolia testnet
+  '2023': '0x...', // Monad testnet
   // Add more networks as needed
 };
 
@@ -60,31 +61,29 @@ class ContractService {
    * @param {string} suspiciousAddress - The address suspected of scam activity   * @param {string} description - Description of the scam
    * @param {string} evidence - Evidence URL or IPFS hash
    * @returns {Promise<any>} Transaction result
-   */
-  async reportScam(
+   */  async reportScam(
     suspiciousAddress: string,
-    description: string,
+    reason: string,
     evidence: string
   ): Promise<any> {
     const contract = await this.getContract();
     
     console.log(`Reporting scam: ${shortenAddress(suspiciousAddress)}`);
-    return contract.reportScam(suspiciousAddress, description, evidence);
+    return contract.reportScam(suspiciousAddress, reason, evidence);
   }
 
   /**
    * Vote on a scam report (DAO functionality)
    * @param {number} reportId - The ID of the report to vote on
    * @param {boolean} isScam - Whether the user believes the report is valid   * @returns {Promise<any>} Transaction result
-   */
-  async voteOnScamReport(
-    reportId: number,
-    isScam: boolean
+   */  async voteOnScamReport(
+    proposalId: string,
+    inSupport: boolean
   ): Promise<any> {
     const contract = await this.getContract();
     
-    console.log(`Voting on report #${reportId}, isScam: ${isScam}`);
-    return contract.voteOnReport(reportId, isScam);
+    console.log(`Voting on report with proposalId: ${proposalId}, inSupport: ${inSupport}`);
+    return contract.voteOnReport(proposalId, inSupport);
   }
 
   /**
@@ -97,17 +96,16 @@ class ContractService {
     const reportCount = await contract.getReportCount();
     const reports = [];
     
-    for (let i = 0; i < reportCount.toNumber(); i++) {
-      const report = await contract.getReport(i);
+    for (let i = 0; i < reportCount.toNumber(); i++) {      const report = await contract.getReport(i);
       reports.push({
         id: i,
         reporter: report.reporter,
         suspiciousAddress: report.suspiciousAddress,
-        description: report.description,
+        description: report.description, // This matches with 'reason' in the contract
         evidence: report.evidence,
-        timestamp: new Date(report.timestamp.toNumber() * 1000),
-        votesFor: report.votesFor.toNumber(),
-        votesAgainst: report.votesAgainst.toNumber(),
+        timestamp: new Date(Number(report.timestamp) * 1000),
+        votesFor: Number(report.votesFor),
+        votesAgainst: Number(report.votesAgainst),
         confirmed: report.confirmed
       });
     }

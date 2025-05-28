@@ -4,6 +4,97 @@
 import { ethers, formatUnits, parseUnits } from 'ethers';
 
 /**
+ * Network information by chain ID
+ */
+export const NETWORK_INFO = {
+  '1': {
+    name: 'Ethereum Mainnet',
+    currency: 'ETH',
+    explorer: 'https://etherscan.io',
+    blockTime: 15, // seconds
+    isTestnet: false,
+    logoUrl: '/ethereum.svg'
+  },
+  '5': {
+    name: 'Goerli Testnet',
+    currency: 'ETH',
+    explorer: 'https://goerli.etherscan.io',
+    blockTime: 15,
+    isTestnet: true,
+    logoUrl: '/ethereum.svg'
+  },
+  '11155111': {
+    name: 'Sepolia Testnet',
+    currency: 'ETH',
+    explorer: 'https://sepolia.etherscan.io',
+    blockTime: 15,
+    isTestnet: true,
+    logoUrl: '/ethereum.svg'
+  },
+  '2023': {
+    name: 'Monad Testnet',
+    currency: 'MONAD',
+    explorer: 'https://explorer.testnet.monad.xyz',
+    blockTime: 2, // Monad has much faster block times
+    isTestnet: true,
+    logoUrl: '/monad.svg',
+    recommended: true,
+    rpcUrl: 'https://rpc.testnet.monad.xyz'
+  }
+};
+
+/**
+ * Check if the current network is Monad
+ * @param {string} chainId - The current chain ID
+ * @returns {boolean} True if on Monad network
+ */
+export function isMonadNetwork(chainId: string | null | undefined): boolean {
+  return chainId === '2023';
+}
+
+/**
+ * Get transaction confirmation threshold based on network
+ * @param {string} chainId - The current chain ID
+ * @returns {number} Number of confirmations to wait for
+ */
+export function getConfirmationThreshold(chainId: string | null | undefined): number {
+  return isMonadNetwork(chainId) ? 1 : 3; // Monad needs fewer confirmations
+}
+
+/**
+ * Get recommended polling interval for transaction status
+ * @param {string} chainId - The current chain ID
+ * @returns {number} Polling interval in milliseconds
+ */
+export function getTxPollInterval(chainId: string | null | undefined): number {
+  return isMonadNetwork(chainId) ? 500 : 3000; // Poll faster on Monad
+}
+
+/**
+ * Get explorer URL for a transaction
+ * @param {string} txHash - Transaction hash
+ * @param {string} chainId - Chain ID
+ * @returns {string} Explorer URL
+ */
+export function getExplorerTxUrl(txHash: string, chainId: string): string {
+  const network = NETWORK_INFO[chainId as keyof typeof NETWORK_INFO];
+  if (!network) return '';
+  return `${network.explorer}/tx/${txHash}`;
+}
+
+/**
+ * Get explorer URL for an address
+ * @param {string} address - Ethereum address
+ * @param {string} chainId - Chain ID
+ * @returns {string} Explorer URL
+ */
+export function getExplorerAddressUrl(address: string, chainId: string): string {
+  const network = NETWORK_INFO[chainId as keyof typeof NETWORK_INFO];
+  if (!network) return '';
+  return `${network.explorer}/address/${address}`;
+}
+
+/**
  * Shorten an Ethereum address for display
  * @param {string} address - The address to shorten
  * @param {number} chars - Number of characters to keep at start and end (default: 4)

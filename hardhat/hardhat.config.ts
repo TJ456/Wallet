@@ -9,6 +9,7 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x000000000000000000000000000000
 // API keys for blockchain explorers
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 const POLYGONSCAN_API_KEY = process.env.POLYGONSCAN_API_KEY || "";
+const MONADSCAN_API_KEY = process.env.MONADSCAN_API_KEY || "";
 
 const config: HardhatUserConfig = {
   solidity: "0.8.28",
@@ -40,6 +41,14 @@ const config: HardhatUserConfig = {
         ? [PRIVATE_KEY] 
         : [],
       chainId: 80001
+    },
+    // Monad testnet
+    monad_testnet: {
+      url: process.env.MONAD_RPC_URL || "https://rpc.testnet.monad.xyz",
+      accounts: PRIVATE_KEY !== "0x0000000000000000000000000000000000000000000000000000000000000000" 
+        ? [PRIVATE_KEY] 
+        : [],
+      chainId: 2023
     }
   },
   etherscan: {
@@ -48,8 +57,19 @@ const config: HardhatUserConfig = {
       goerli: ETHERSCAN_API_KEY,
       sepolia: ETHERSCAN_API_KEY,
       polygon: POLYGONSCAN_API_KEY,
-      polygonMumbai: POLYGONSCAN_API_KEY
-    }
+      polygonMumbai: POLYGONSCAN_API_KEY,
+      monad_testnet: MONADSCAN_API_KEY
+    },
+    customChains: [
+      {
+        network: "monad_testnet",
+        chainId: 2023,
+        urls: {
+          apiURL: "https://explorer-api-testnet.monad.xyz/api",
+          browserURL: "https://explorer.testnet.monad.xyz"
+        }
+      }
+    ]
   },
   paths: {
     sources: "./contracts",

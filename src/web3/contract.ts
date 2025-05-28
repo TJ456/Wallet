@@ -6,13 +6,13 @@ import walletConnector from './wallet';
 import UnhackableWalletABI from './abi/UnhackableWallet.json';
 import { shortenAddress } from './utils';
 
-// Contract addresses - can be moved to environment variables later
-const CONTRACT_ADDRESSES = {
-  // Use appropriate address for each network
-  '1': '0x0000000000000000000000000000000000000000', // Mainnet - replace with actual address when deployed
-  '5': '0x0000000000000000000000000000000000000000', // Goerli testnet - replace with actual address when deployed
-  '11155111': '0x0000000000000000000000000000000000000000', // Sepolia testnet - replace with actual address when deployed
-  '2023': '0x7A791FE5A35131B7D98F854A64e7F94180F27C7B', // Monad testnet address
+// Contract addresses for each network - load from environment variables when available
+const CONTRACT_ADDRESSES: { [chainId: string]: string } = {
+  // Mainnet and testnet addresses
+  '1': import.meta.env.VITE_CONTRACT_ADDRESS_MAINNET || '0x0000000000000000000000000000000000000000',
+  '5': import.meta.env.VITE_CONTRACT_ADDRESS_GOERLI || '0x0000000000000000000000000000000000000000',
+  '11155111': import.meta.env.VITE_CONTRACT_ADDRESS_SEPOLIA || '0x0000000000000000000000000000000000000000', 
+  '2023': import.meta.env.VITE_CONTRACT_ADDRESS_MONAD || '0x7A791FE5A35131B7D98F854A64e7F94180F27C7B', // Default Monad testnet address
   // Add more networks as needed
 };
 
@@ -28,23 +28,37 @@ class ContractService {
    */
   async initContract(): Promise<Contract> {
     if (!walletConnector.provider || !walletConnector.signer || !walletConnector.chainId) {
-      throw new Error('Wallet not connected');
+      throw new Error('Wallet not connected. Please connect your wallet first.');
     }
 
     const chainId = walletConnector.chainId.toString();
     const contractAddress = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
-      if (!contractAddress) {
-      throw new Error(`Contract not deployed on network ${walletConnector.networkName}`);
+    
+    // Validate contract address
+    if (!contractAddress || contractAddress === '0x0000000000000000000000000000000000000000') {
+      throw new Error(`Contract not deployed on network ${walletConnector.networkName || chainId}. Please switch to a supported network.`);
     }
 
-    this.contractInstance = new Contract(
-      contractAddress,
-      UnhackableWalletABI.abi,
-      walletConnector.signer
-    );
-
-    return this.contractInstance;
+    try {
+      this.contractInstance = new Contract(
+        contractAddress,
+        UnhackableWalletABI.abi,
+        walletConnector.signer
+      );
+      
+      // Verify the contract exists on the network by calling a view function
+      await this.contractInstance.getReportCount();
+      
+      return this.contractInstance;
+    } catch (error: any) {
+      console.error('Failed to initialize contract:', error);
+      if (error.message.includes('call revert exception')) {
+        throw new Error(`Contract at ${contractAddress} doesn't match the expected ABI. Please check deployment.`);
+      }
+      throw new Error(`Failed to connect to the contract: ${error.message}`);
+    }
   }
+  
   /**
    * Get the contract instance, initializing if necessary
    * @returns {Promise<Contract>} The contract instance
@@ -55,35 +69,104 @@ class ContractService {
     }
     return this.contractInstance;
   }
+  
+  /**
+   * Verify that the contract on the connected network matches our ABI
+   * @returns {Promise<boolean>} True if contract is valid
+   */
+  async verifyContract(): Promise<boolean> {
+    try {
+      const contract = await this.getContract();
+      
+      // Try to call a view functions to verify the contract
+      await contract.getReportCount();
+      
+      // If we got here, the contract is valid
+      return true;
+    } catch (error) {
+      console.error("Contract verification failed:", error);
+      return false;
+    }
+  }
+  
+  /**
+   * Check if user has enough ETH to perform a transaction
+   * @param {string} amount - The amount in ETH to check
+   * @returns {Promise<boolean>} True if user has enough balance
+   */
+  async hasEnoughBalance(amount: string): Promise<boolean> {
+    if (!walletConnector.address) return false;
+    
+    try {
+      const balance = await walletConnector.getBalance();
+      const amountValue = parseFloat(amount);
+      const balanceValue = parseFloat(balance);
+      
+      // Add 10% for gas costs
+      const totalNeeded = amountValue * 1.1;
+      return balanceValue >= totalNeeded;
+    } catch (error) {
+      console.error("Error checking balance:", error);
+      return false;
+    }
+  }
 
   /**
    * Report a potential scam address
-   * @param {string} suspiciousAddress - The address suspected of scam activity   * @param {string} description - Description of the scam
+   * @param {string} suspiciousAddress - The address suspected of scam activity
+   * @param {string} reason - Description of the scam
    * @param {string} evidence - Evidence URL or IPFS hash
    * @returns {Promise<any>} Transaction result
-   */  async reportScam(
+   */
+  async reportScam(
     suspiciousAddress: string,
     reason: string,
     evidence: string
   ): Promise<any> {
-    const contract = await this.getContract();
-    
-    console.log(`Reporting scam: ${shortenAddress(suspiciousAddress)}`);
-    return contract.reportScam(suspiciousAddress, reason, evidence);
+    try {
+      // Check wallet connection
+      if (!walletConnector.address) {
+        throw new Error('Wallet not connected');
+      }
+      
+      const contract = await this.getContract();
+      
+      console.log(`Reporting scam: ${shortenAddress(suspiciousAddress)}`);
+      const tx = await contract.reportScam(suspiciousAddress, reason, evidence);
+      
+      return tx;
+    } catch (error: any) {
+      console.error('Report scam error:', error);
+      throw new Error(`Failed to report scam: ${error.message}`);
+    }
   }
 
   /**
    * Vote on a scam report (DAO functionality)
-   * @param {number} reportId - The ID of the report to vote on
-   * @param {boolean} isScam - Whether the user believes the report is valid   * @returns {Promise<any>} Transaction result
-   */  async voteOnScamReport(
+   * @param {string} proposalId - The ID of the report to vote on
+   * @param {boolean} inSupport - Whether the user believes the report is valid
+   * @returns {Promise<any>} Transaction result
+   */
+  async voteOnScamReport(
     proposalId: string,
     inSupport: boolean
   ): Promise<any> {
-    const contract = await this.getContract();
-    
-    console.log(`Voting on report with proposalId: ${proposalId}, inSupport: ${inSupport}`);
-    return contract.voteOnReport(proposalId, inSupport);
+    try {
+      // Check wallet connection
+      if (!walletConnector.address) {
+        throw new Error('Wallet not connected');
+      }
+      
+      const contract = await this.getContract();
+      
+      console.log(`Voting on report with proposalId: ${proposalId}, inSupport: ${inSupport}`);
+      const tx = await contract.voteOnReport(proposalId, inSupport);
+      
+      return tx;
+    } catch (error: any) {
+      console.error('Vote error:', error);
+      throw new Error(`Failed to vote on report: ${error.message}`);
+    }
   }
 
   /**
@@ -91,26 +174,32 @@ class ContractService {
    * @returns {Promise<any[]>} List of scam reports
    */
   async getScamReports(): Promise<any[]> {
-    const contract = await this.getContract();
-    
-    const reportCount = await contract.getReportCount();
-    const reports = [];
-    
-    for (let i = 0; i < reportCount.toNumber(); i++) {      const report = await contract.getReport(i);
-      reports.push({
-        id: i,
-        reporter: report.reporter,
-        suspiciousAddress: report.suspiciousAddress,
-        description: report.description, // This matches with 'reason' in the contract
-        evidence: report.evidence,
-        timestamp: new Date(Number(report.timestamp) * 1000),
-        votesFor: Number(report.votesFor),
-        votesAgainst: Number(report.votesAgainst),
-        confirmed: report.confirmed
-      });
+    try {
+      const contract = await this.getContract();
+      
+      const reportCount = await contract.getReportCount();
+      const reports = [];
+      
+      for (let i = 0; i < reportCount.toNumber(); i++) {
+        const report = await contract.getReport(i);
+        reports.push({
+          id: i,
+          reporter: report.reporter,
+          suspiciousAddress: report.suspiciousAddress,
+          description: report.description, // This matches with 'reason' in the contract
+          evidence: report.evidence,
+          timestamp: new Date(Number(report.timestamp) * 1000),
+          votesFor: Number(report.votesFor),
+          votesAgainst: Number(report.votesAgainst),
+          confirmed: report.confirmed
+        });
+      }
+      
+      return reports;
+    } catch (error: any) {
+      console.error('Get reports error:', error);
+      return [];
     }
-    
-    return reports;
   }
 
   /**
@@ -118,29 +207,56 @@ class ContractService {
    * @returns {Promise<any[]>} List of user's scam reports
    */
   async getUserReports(): Promise<any[]> {
-    const reports = await this.getScamReports();
-    return reports.filter(
-      report => report.reporter.toLowerCase() === walletConnector.address?.toLowerCase()
-    );
+    try {
+      if (!walletConnector.address) return [];
+      
+      const reports = await this.getScamReports();
+      return reports.filter(
+        report => report.reporter.toLowerCase() === walletConnector.address?.toLowerCase()
+      );
+    } catch (error) {
+      console.error('Get user reports error:', error);
+      return [];
+    }
   }
 
   /**
    * Transfer funds using the secure transfer function of the wallet
    * @param {string} to - Recipient address
-   * @param {string} amount - Amount in ETH   * @returns {Promise<any>} Transaction result
+   * @param {string} amount - Amount in ETH
+   * @returns {Promise<any>} Transaction result
    */
   async secureSendETH(
     to: string,
     amount: string
   ): Promise<any> {
-    const contract = await this.getContract();
-    
-    // Convert ETH amount to Wei
-    const amountWei = parseUnits(amount, 18);
-    console.log(`Sending ${amount} ETH to ${shortenAddress(to)}`);
-    return contract.secureTransfer(to, {
-      value: amountWei
-    });
+    try {
+      // Check wallet connection
+      if (!walletConnector.address) {
+        throw new Error('Wallet not connected');
+      }
+      
+      // Check if user has enough balance
+      const hasBalance = await this.hasEnoughBalance(amount);
+      if (!hasBalance) {
+        throw new Error('Insufficient balance for this transaction (including gas fees)');
+      }
+      
+      const contract = await this.getContract();
+      
+      // Convert ETH amount to Wei
+      const amountWei = parseUnits(amount, 18);
+      console.log(`Sending ${amount} ETH to ${shortenAddress(to)}`);
+      
+      const tx = await contract.secureTransfer(to, {
+        value: amountWei
+      });
+      
+      return tx;
+    } catch (error: any) {
+      console.error('Secure send error:', error);
+      throw new Error(`Failed to send transaction: ${error.message}`);
+    }
   }
 
   /**
@@ -149,8 +265,14 @@ class ContractService {
    * @returns {Promise<boolean>} Whether the address is flagged as a scam
    */
   async isScamAddress(address: string): Promise<boolean> {
-    const contract = await this.getContract();
-    return contract.isScamAddress(address);
+    try {
+      const contract = await this.getContract();
+      return await contract.isScamAddress(address);
+    } catch (error) {
+      console.error('Check scam address error:', error);
+      // Default to false if error occurs during check
+      return false;
+    }
   }
 
   /**
@@ -159,9 +281,15 @@ class ContractService {
    * @returns {Promise<number>} Score from 0-100 representing scam likelihood
    */
   async getScamScore(address: string): Promise<number> {
-    const contract = await this.getContract();
-    const score = await contract.getScamScore(address);
-    return score.toNumber();
+    try {
+      const contract = await this.getContract();
+      const score = await contract.getScamScore(address);
+      return score.toNumber();
+    } catch (error) {
+      console.error('Get scam score error:', error);
+      // Return zero score if error occurs
+      return 0;
+    }
   }
 }
 
@@ -185,9 +313,14 @@ export const getContract = async (): Promise<Contract> => {
  * @returns Transaction hash
  */
 export const sendTransaction = async (to: string, amountEth: string): Promise<string> => {
-  const tx = await contractService.secureSendETH(to, amountEth);
-  await tx.wait();
-  return tx.hash;
+  try {
+    const tx = await contractService.secureSendETH(to, amountEth);
+    const receipt = await tx.wait();
+    return receipt.hash;
+  } catch (error: any) {
+    console.error('Send transaction error:', error);
+    throw new Error(`Transaction failed: ${error.message}`);
+  }
 };
 
 /**
@@ -198,9 +331,14 @@ export const sendTransaction = async (to: string, amountEth: string): Promise<st
  * @returns Transaction hash
  */
 export const reportScam = async (scammer: string, reason: string, evidence: string = ""): Promise<string> => {
-  const tx = await contractService.reportScam(scammer, reason, evidence);
-  await tx.wait();
-  return tx.hash;
+  try {
+    const tx = await contractService.reportScam(scammer, reason, evidence);
+    const receipt = await tx.wait();
+    return receipt.hash;
+  } catch (error: any) {
+    console.error('Report scam error:', error);
+    throw new Error(`Report submission failed: ${error.message}`);
+  }
 };
 
 /**
@@ -210,9 +348,14 @@ export const reportScam = async (scammer: string, reason: string, evidence: stri
  * @returns Transaction hash
  */
 export const voteOnProposal = async (proposalId: string, inSupport: boolean): Promise<string> => {
-  const tx = await contractService.voteOnScamReport(proposalId, inSupport);
-  await tx.wait();
-  return tx.hash;
+  try {
+    const tx = await contractService.voteOnScamReport(proposalId, inSupport);
+    const receipt = await tx.wait();
+    return receipt.hash;
+  } catch (error: any) {
+    console.error('Vote error:', error);
+    throw new Error(`Vote submission failed: ${error.message}`);
+  }
 };
 
 export default contractService;

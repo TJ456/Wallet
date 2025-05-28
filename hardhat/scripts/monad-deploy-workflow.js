@@ -155,11 +155,13 @@ async function main() {
         console.log('Deployment cancelled. Please fix your private key issues and try again.');
         return;
       }
-    }
-
-    // Step 4: Compile contracts
+    }    // Step 4: Compile contracts
     console.log('\nCompiling smart contracts...');
     await runCommand('npm', ['run', 'compile']);
+    
+    // Step 4.5: Extract ABI and bytecode
+    console.log('\nExtracting ABI and bytecode...');
+    await runCommand('npm', ['run', 'extract-abi']);
     
     // Step 5: Ask if user has Monad testnet tokens
     const hasTokens = await askQuestion('Do you have Monad testnet tokens? (y/n)');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, AlertTriangle, CheckCircle, Zap, Users, FileText, Settings } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle, Zap, Users, FileText, Settings, PieChart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import SecurityScore from '@/components/SecurityScore';
 import AILearningFeedback from '@/components/AILearningFeedback';
 import TelegramCompanion from '@/components/TelegramCompanion';
 import TelegramSettings from '@/components/TelegramSettings';
+import WalletAnalytics from '@/components/WalletAnalytics';
 
 const Index = () => {
   const [walletConnected, setWalletConnected] = useState(false);
@@ -178,6 +179,7 @@ const Index = () => {
           <nav className="p-6 space-y-2">
             {[
               { id: 'overview', label: 'Overview', icon: Shield },
+              { id: 'analytics', label: 'Wallet Analytics', icon: PieChart },
               { id: 'dao', label: 'DAO Voting', icon: Users },
               { id: 'reports', label: 'Threat Reports', icon: FileText },
               { id: 'settings', label: 'Settings', icon: Settings },
@@ -280,6 +282,8 @@ const Index = () => {
             </div>
           )}
 
+          {activeTab === 'analytics' && <WalletAnalytics walletAddress={currentAddress} />}
+          
           {activeTab === 'dao' && (
             <div className="space-y-6">
               {/* Enhanced DAO Panel */}

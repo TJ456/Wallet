@@ -129,9 +129,14 @@ func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gi
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 			return
 		}
-
-		// Link Telegram chat to wallet
-		telegramService.LinkWallet(req.TelegramChatID, address.(string))
+		// Link Telegram chat to wallet with empty user details (will be updated when user interacts with the bot)
+		if err := telegramService.LinkWallet(req.TelegramChatID, address.(string), "", "", ""); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to link Telegram account: " + err.Error(),
+			})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,

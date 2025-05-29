@@ -10,14 +10,14 @@ import (
 
 // InitializeDatabase sets up the database schema and creates any required tables
 func InitializeDatabase(db *gorm.DB) error {
-	log.Println("Running database migrations...")
-	// Auto migrate all models
+	log.Println("Running database migrations...")	// Auto migrate all models
 	err := db.AutoMigrate(
 		&models.Transaction{},
 		&models.Report{},
 		&models.DAOProposal{},
 		&models.DAOVote{},
 		&models.Recovery{},
+		&models.TelegramMapping{},
 	)
 
 	if err != nil {

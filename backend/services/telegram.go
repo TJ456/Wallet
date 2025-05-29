@@ -5,19 +5,21 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"Wallet/backend/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // TelegramService manages interactions with the Telegram Bot API
 type TelegramService struct {
-	Token       string
-	BaseURL     string
-	UserMapping map[string]string // Maps Telegram Chat IDs to wallet addresses
+	Token   string
+	BaseURL string
+	DB      *gorm.DB // Database connection for storing mappings
 }
 
 // TelegramUpdate represents an update from Telegram
@@ -40,6 +42,7 @@ type TelegramUser struct {
 	ID        int64  `json:"id"`
 	IsBot     bool   `json:"is_bot"`
 	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name,omitempty"`
 	Username  string `json:"username,omitempty"`
 }
 
@@ -54,15 +57,15 @@ type TelegramChat struct {
 }
 
 // NewTelegramService creates a new Telegram service instance
-func NewTelegramService(token string) *TelegramService {
+func NewTelegramService(token string, db *gorm.DB) *TelegramService {
 	if token == "" {
 		log.Println("Warning: Telegram bot token is not set")
 	}
 
 	return &TelegramService{
-		Token:       token,
-		BaseURL:     fmt.Sprintf("https://api.telegram.org/bot%s", token),
-		UserMapping: make(map[string]string),
+		Token:   token,
+		BaseURL: fmt.Sprintf("https://api.telegram.org/bot%s", token),
+		DB:      db,
 	}
 }
 
@@ -99,13 +102,16 @@ func (ts *TelegramService) SendMessage(chatID int64, text string) error {
 
 // NotifySecurityAlert sends a security alert to the user's telegram if they have linked their account
 func (ts *TelegramService) NotifySecurityAlert(walletAddress string, alert *models.SecurityAlert) error {
-	chatID, exists := ts.UserMapping[walletAddress]
-	if !exists {
-		return fmt.Errorf("no telegram chat linked to wallet %s", walletAddress)
+	var mapping models.TelegramMapping
+	result := ts.DB.Where("wallet_address = ? AND is_active = ?", walletAddress, true).First(&mapping)
+	if result.Error != nil {
+		return fmt.Errorf("no telegram chat linked to wallet %s: %w", walletAddress, result.Error)
 	}
 
-	chatIDInt := int64(0)
-	fmt.Sscanf(chatID, "%d", &chatIDInt)
+	chatIDInt, err := strconv.ParseInt(mapping.ChatID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid chat ID format: %w", err)
+	}
 
 	message := fmt.Sprintf("⚠️ <b>SECURITY ALERT</b> ⚠️\n\n"+
 		"<b>Type:</b> %s\n"+
@@ -124,13 +130,16 @@ func (ts *TelegramService) NotifySecurityAlert(walletAddress string, alert *mode
 
 // NotifyScamReport sends a notification when a scam has been reported
 func (ts *TelegramService) NotifyScamReport(walletAddress string, report *models.Report) error {
-	chatID, exists := ts.UserMapping[walletAddress]
-	if !exists {
-		return fmt.Errorf("no telegram chat linked to wallet %s", walletAddress)
+	var mapping models.TelegramMapping
+	result := ts.DB.Where("wallet_address = ? AND is_active = ?", walletAddress, true).First(&mapping)
+	if result.Error != nil {
+		return fmt.Errorf("no telegram chat linked to wallet %s: %w", walletAddress, result.Error)
 	}
 
-	chatIDInt := int64(0)
-	fmt.Sscanf(chatID, "%d", &chatIDInt)
+	chatIDInt, err := strconv.ParseInt(mapping.ChatID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid chat ID format: %w", err)
+	}
 	message := fmt.Sprintf("🚨 <b>SCAM REPORTED</b> 🚨\n\n"+
 		"<b>Scam Address:</b> %s\n"+
 		"<b>Category:</b> %s\n"+
@@ -147,9 +156,32 @@ func (ts *TelegramService) NotifyScamReport(walletAddress string, report *models
 }
 
 // LinkWallet associates a Telegram chat ID with a wallet address
-func (ts *TelegramService) LinkWallet(chatID string, walletAddress string) {
-	ts.UserMapping[walletAddress] = chatID
-	// In a real implementation, this would be saved to a database
+func (ts *TelegramService) LinkWallet(chatID string, walletAddress string, userName string, firstName string, lastName string) error {
+	// Check if mapping already exists
+	var existingMapping models.TelegramMapping
+	result := ts.DB.Where("wallet_address = ?", walletAddress).First(&existingMapping)
+	
+	if result.Error == nil {
+		// Update existing mapping
+		existingMapping.ChatID = chatID
+		existingMapping.UserName = userName
+		existingMapping.FirstName = firstName
+		existingMapping.LastName = lastName
+		existingMapping.IsActive = true
+		return ts.DB.Save(&existingMapping).Error
+	}
+	
+	// Create new mapping
+	mapping := models.TelegramMapping{
+		WalletAddress: walletAddress,
+		ChatID:        chatID,
+		UserName:      userName,
+		FirstName:     firstName,
+		LastName:      lastName,
+		IsActive:      true,
+	}
+	
+	return ts.DB.Create(&mapping).Error
 }
 
 // GetWebhookHandler returns a Gin handler for Telegram webhooks
@@ -185,7 +217,6 @@ func (ts *TelegramService) processMessage(message *TelegramMessage) {
 				"Use /link YOUR_WALLET_ADDRESS to connect your wallet."
 
 			ts.SendMessage(message.Chat.ID, welcomeMessage)
-
 		case "/link":
 			if len(cmd) < 2 {
 				ts.SendMessage(message.Chat.ID, "Please provide your wallet address: /link YOUR_WALLET_ADDRESS")
@@ -194,7 +225,23 @@ func (ts *TelegramService) processMessage(message *TelegramMessage) {
 
 			walletAddr := cmd[1]
 			chatID := fmt.Sprintf("%d", message.Chat.ID)
-			ts.LinkWallet(chatID, walletAddr)
+			
+			// Get user details
+			userName := ""
+			firstName := ""
+			lastName := ""
+			
+			if message.From != nil {
+				userName = message.From.Username
+				firstName = message.From.FirstName
+				lastName = message.From.LastName
+			}
+			
+			if err := ts.LinkWallet(chatID, walletAddr, userName, firstName, lastName); err != nil {
+				log.Printf("Error linking wallet: %v", err)
+				ts.SendMessage(message.Chat.ID, "❌ Failed to link your wallet. Please try again later.")
+				return
+			}
 
 			successMsg := fmt.Sprintf("✅ Successfully linked your Telegram account to wallet %s!\n\n"+
 				"You will now receive security alerts and notifications for this wallet.",
@@ -211,14 +258,29 @@ func (ts *TelegramService) processMessage(message *TelegramMessage) {
 				"/help - Show this help message"
 
 			ts.SendMessage(message.Chat.ID, helpMessage)
-
 		case "/status":
-			// In a real implementation, this would fetch actual status
+			// Check if user has linked wallet
+			var mappings []models.TelegramMapping
+			chatIDStr := fmt.Sprintf("%d", message.Chat.ID)
+			result := ts.DB.Where("chat_id = ? AND is_active = ?", chatIDStr, true).Find(&mappings)
+			
+			if result.Error != nil || result.RowsAffected == 0 {
+				ts.SendMessage(message.Chat.ID, "❌ You don't have any linked wallets. Use /link YOUR_WALLET_ADDRESS to connect your wallet.")
+				return
+			}
+			
+			// Generate status message
 			statusMessage := "🛡️ <b>Security Status</b>: Strong\n\n" +
 				"✅ No suspicious activities detected\n" +
 				"✅ AI scam detection active\n" +
 				"✅ Real-time monitoring enabled\n\n" +
-				"Your wallet is currently protected by UnhackableWallet security features."
+				"<b>Connected wallets:</b>\n"
+				
+			for _, mapping := range mappings {
+				statusMessage += fmt.Sprintf("• %s\n", mapping.WalletAddress)
+			}
+			
+			statusMessage += "\nYour wallet is currently protected by UnhackableWallet security features."
 
 			ts.SendMessage(message.Chat.ID, statusMessage)
 		}

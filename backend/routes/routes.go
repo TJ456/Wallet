@@ -15,7 +15,7 @@ import (
 )
 
 // SetupRouter configures all API routes
-func SetupRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.Engine {
+func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.Engine {
 	r := gin.Default()
 
 	// Configure CORS
@@ -25,15 +25,18 @@ func SetupRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.En
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Wallet-Address", "X-Wallet-Signature", "X-Wallet-Message"},
 		AllowCredentials: true,
 	}))
+
 	// Initialize services
 	ethRpcUrl := os.Getenv("ETH_RPC_URL")
 	if ethRpcUrl == "" {
 		ethRpcUrl = "https://eth-sepolia.g.alchemy.com/v2/your-api-key" // Default value
-	}	analyticsService, err := services.NewWalletAnalyticsService(db, ethRpcUrl)
+	}
+	
+	analyticsService, err := services.NewWalletAnalyticsService(db, ethRpcUrl)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize analytics service: %v", err)
-		// Create a default analytics service
-		analyticsService = &services.WalletAnalyticsService{DB: db}
+		// Use a minimal analytics service if initialization fails
+		analyticsService, _ = services.NewWalletAnalyticsService(db, "")
 	}
 
 	aiService := services.NewAIService(analyticsService)
@@ -50,8 +53,10 @@ func SetupRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.En
 	daoHandler := handlers.NewDAOHandler(db, blockchainService)
 	authHandler := handlers.NewAuthHandler(blockchainService)
 	analyticsHandler := handlers.NewWalletAnalyticsHandler(analyticsService)
+	
 	// Apply rate limiting to all API routes
 	r.Use(middleware.RateLimitMiddleware())
+	
 	// Public API routes
 	api := r.Group("/api")
 	{

@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { Loader2, Info, PieChart as PieChartIcon, BarChart as BarChartIcon, LineChart as LineChartIcon } from 'lucide-react';
+import { Loader2, Info, AlertCircle, PieChart as PieChartIcon, BarChart as BarChartIcon, LineChart as LineChartIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ChartContainer, ChartTooltipContent, ChartTooltip } from '@/components/ui/chart';
 import walletConnector from '@/web3/wallet';
-import { useApiMultiple } from '@/hooks/use-api';
-import ApiErrorHandler from '@/components/ApiErrorHandler';
 
 // Types based on backend models/wallet_analytics.go
 interface WalletAnalytics {
@@ -17,19 +15,19 @@ interface WalletAnalytics {
   avg_min_between_sent_tx: number;
   avg_min_between_received_tx: number;
   time_diff_first_last_mins: number;
-
+  
   // Transaction counts
   sent_tx_count: number;
   received_tx_count: number;
   created_contracts_count: number;
-
+  
   // ETH value metrics
   max_value_received: string;
   avg_value_received: string;
   avg_value_sent: string;
   total_ether_sent: string;
   total_ether_balance: string;
-
+  
   // ERC20 token metrics
   erc20_total_ether_received: string;
   erc20_total_ether_sent: string;
@@ -38,11 +36,11 @@ interface WalletAnalytics {
   erc20_uniq_rec_token_name: number;
   erc20_most_sent_token_type: string;
   erc20_most_rec_token_type: string;
-
+  
   // Derived metrics
   txn_frequency: number;
   avg_txn_value: string;
-
+  
   // Additional metrics
   wallet_age_days: number;
   risk_score: number;
@@ -59,50 +57,58 @@ interface WalletAnalyticsProps {
 }
 
 const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
+  const [analytics, setAnalytics] = useState<WalletAnalytics | null>(null);
+  const [riskData, setRiskData] = useState<RiskScoreResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('transactions');
-  const [currentAddress, setCurrentAddress] = useState<string | null>(null);
 
-  // Get the address to use (prop or connected wallet)
-  const address = walletAddress || walletConnector.address;
-
-  // Use the new API hook for multiple requests
-  const {
-    data: apiData,
-    loading,
-    error,
-    retry,
-    isRetrying,
-    execute
-  } = useApiMultiple<[WalletAnalytics, RiskScoreResponse]>(
-    address ? [
-      { method: 'GET', endpoint: `/analytics/wallet/${address}` },
-      { method: 'GET', endpoint: `/analytics/risk/${address}` }
-    ] : [],
-    {
-      immediate: false, // We'll control when to execute
-      onError: (error) => {
-        console.error("Error fetching wallet analytics:", error);
-
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // Use connected wallet if walletAddress is not provided
+        const address = walletAddress || walletConnector.address;
+        
+        if (!address) {
+          setError("No wallet address available");
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch wallet analytics data
+        const analyticsResponse = await fetch(`/api/analytics/wallet/${address}`);
+        if (!analyticsResponse.ok) {
+          throw new Error(`Failed to fetch analytics: ${analyticsResponse.statusText}`);
+        }
+        const analyticsData = await analyticsResponse.json();
+        setAnalytics(analyticsData);
+        
+        // Fetch risk score data
+        const riskResponse = await fetch(`/api/analytics/risk/${address}`);
+        if (!riskResponse.ok) {
+          throw new Error(`Failed to fetch risk score: ${riskResponse.statusText}`);
+        }
+        const riskData = await riskResponse.json();
+        setRiskData(riskData);
+      } catch (err) {
+        console.error("Error fetching wallet analytics:", err);
+        setError(err instanceof Error ? err.message : "Unknown error");
+        
         // For development/demo purposes, load mock data if the API is not available
         if (process.env.NODE_ENV === 'development') {
-          // Note: In a real implementation, you might want to set mock data differently
-          console.log("Loading mock data for development");
+          setAnalytics(getMockAnalyticsData());
+          setRiskData(getMockRiskData());
         }
+      } finally {
+        setLoading(false);
       }
-    }
-  );
-
-  // Extract analytics and risk data from the API response
-  const analytics = apiData?.[0] || null;
-  const riskData = apiData?.[1] || null;
-
-  // Execute API calls when address changes
-  useEffect(() => {
-    if (address && address !== currentAddress) {
-      setCurrentAddress(address);
-      execute();
-    }
-  }, [address, currentAddress, execute]);
+    };
+    
+    fetchData();
+  }, [walletAddress]);
 
   // Format Ether values (from wei)
   const formatEther = (value: string) => {
@@ -119,7 +125,7 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
   // Generate data for transaction activity chart
   const getTransactionActivityData = () => {
     if (!analytics) return [];
-
+    
     return [
       { name: 'Sent', value: analytics.sent_tx_count, fill: '#4ADE80' },
       { name: 'Received', value: analytics.received_tx_count, fill: '#2DD4BF' },
@@ -130,11 +136,11 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
   // Generate data for token metrics chart
   const getTokenDistributionData = () => {
     if (!analytics) return [];
-
+    
     const erc20Received = parseFloat(formatEther(analytics.erc20_total_ether_received));
     const erc20Sent = parseFloat(formatEther(analytics.erc20_total_ether_sent));
     const erc20SentToContracts = parseFloat(formatEther(analytics.erc20_total_ether_sent_contract));
-
+    
     return [
       { name: 'Received', value: erc20Received, fill: '#2DD4BF' },
       { name: 'Sent to EOAs', value: erc20Sent - erc20SentToContracts, fill: '#4ADE80' },
@@ -145,25 +151,25 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
   // Generate data for wallet age and activity
   const getWalletActivityTimelineData = () => {
     if (!analytics) return [];
-
+    
     // Mock timeline data based on wallet age
     const days = analytics.wallet_age_days;
-
+    
     // Create activity points with diminishing frequency as we go back in time
     const points = [];
     const numPoints = Math.min(10, days); // Cap at 10 data points
-
+    
     for (let i = 0; i < numPoints; i++) {
       const daysAgo = Math.round((days / numPoints) * i);
-      const txCount = Math.round(analytics.txn_frequency * (numPoints - i) / numPoints * 2) +
+      const txCount = Math.round(analytics.txn_frequency * (numPoints - i) / numPoints * 2) + 
                      Math.round(Math.random() * 5);
-
+      
       points.push({
         day: daysAgo === 0 ? 'Today' : `${daysAgo} days ago`,
         transactions: txCount
       });
     }
-
+    
     return points.reverse(); // Chronological order
   };
 
@@ -183,9 +189,9 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
   };
 
   // Render metric card with tooltip explanation
-  const MetricCard = ({ title, value, explanation, icon: Icon }: {
-    title: string;
-    value: string | number;
+  const MetricCard = ({ title, value, explanation, icon: Icon }: { 
+    title: string; 
+    value: string | number; 
     explanation: string;
     icon: React.ElementType;
   }) => (
@@ -212,23 +218,6 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
     </div>
   );
 
-  // Handle case where no address is available
-  if (!address) {
-    return (
-      <Card className="bg-black/20 backdrop-blur-lg border-white/10">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center">
-            <PieChartIcon className="mr-2 h-5 w-5" />
-            Wallet Analytics
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center justify-center py-8">
-          <p className="text-gray-400">Please connect your wallet to view analytics</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   // Render loading state
   if (loading) {
     return (
@@ -247,7 +236,7 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
     );
   }
 
-  // Render error state using the new ApiErrorHandler
+  // Render error state
   if (error) {
     return (
       <Card className="bg-black/20 backdrop-blur-lg border-white/10">
@@ -258,15 +247,20 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ApiErrorHandler
-            error={error}
-            onRetry={retry}
-            isRetrying={isRetrying}
-            variant="card"
-            showDetails={process.env.NODE_ENV === 'development'}
-            customRetryText="Retry Analytics"
-            className="bg-red-950/30 border-red-500/30"
-          />
+          <div className="flex items-center space-x-3 p-4 bg-red-950/30 border border-red-500/30 rounded-lg">
+            <AlertCircle className="h-5 w-5 text-red-400" />
+            <div>
+              <h3 className="font-medium text-white">Failed to load analytics</h3>
+              <p className="text-sm text-gray-400">{error}</p>
+            </div>
+          </div>
+          
+          <Button 
+            className="mt-4 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
@@ -314,20 +308,20 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
 
         {/* Key Metrics Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <MetricCard
-            title="Wallet Age"
+          <MetricCard 
+            title="Wallet Age" 
             value={`${analytics.wallet_age_days} days`}
             explanation="The age of this wallet in days since its first transaction"
             icon={Info}
           />
-          <MetricCard
-            title="Transaction Frequency"
+          <MetricCard 
+            title="Transaction Frequency" 
             value={`${analytics.txn_frequency.toFixed(2)} tx/hour`}
             explanation="Average number of transactions per hour over the wallet's lifetime"
             icon={BarChartIcon}
           />
-          <MetricCard
-            title="Total Transactions"
+          <MetricCard 
+            title="Total Transactions" 
             value={analytics.sent_tx_count + analytics.received_tx_count}
             explanation="Total number of transactions sent and received"
             icon={BarChartIcon}
@@ -345,20 +339,20 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
             <TabsTrigger value="tokens">Token Metrics</TabsTrigger>
             <TabsTrigger value="timeline">Activity Timeline</TabsTrigger>
           </TabsList>
-
+          
           <TabsContent value="transactions" className="mt-4">
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
+                <BarChart 
                   data={getTransactionActivityData()}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                   <XAxis dataKey="name" stroke="#888" />
                   <YAxis stroke="#888" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#111',
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#111', 
                       borderColor: '#333',
                       color: '#fff'
                     }}
@@ -372,7 +366,7 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-gray-400">Transaction Details</h3>
@@ -410,7 +404,7 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
               </div>
             </div>
           </TabsContent>
-
+          
           <TabsContent value="tokens" className="mt-4">
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -429,9 +423,9 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
                       <Cell key={`cell-${index}`} fill={entry.fill} />
                     ))}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#111',
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#111', 
                       borderColor: '#333',
                       color: '#fff'
                     }}
@@ -441,7 +435,7 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-gray-400">Token Activity</h3>
@@ -479,7 +473,7 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
               </div>
             </div>
           </TabsContent>
-
+          
           <TabsContent value="timeline" className="mt-4">
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -490,9 +484,9 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                   <XAxis dataKey="day" stroke="#888" />
                   <YAxis stroke="#888" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#111',
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#111', 
                       borderColor: '#333',
                       color: '#fff'
                     }}
@@ -508,7 +502,7 @@ const WalletAnalytics: React.FC<WalletAnalyticsProps> = ({ walletAddress }) => {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-gray-400">Time Metrics</h3>
@@ -558,17 +552,17 @@ function getMockAnalyticsData(): WalletAnalytics {
     avg_min_between_sent_tx: 120.5,
     avg_min_between_received_tx: 240.2,
     time_diff_first_last_mins: 43200, // 30 days
-
+    
     sent_tx_count: 42,
     received_tx_count: 28,
     created_contracts_count: 3,
-
+    
     max_value_received: "1500000000000000000", // 1.5 ETH
     avg_value_received: "250000000000000000", // 0.25 ETH
     avg_value_sent: "180000000000000000", // 0.18 ETH
     total_ether_sent: "5400000000000000000", // 5.4 ETH
     total_ether_balance: "2800000000000000000", // 2.8 ETH
-
+    
     erc20_total_ether_received: "4200000000000000000", // 4.2 ETH
     erc20_total_ether_sent: "2700000000000000000", // 2.7 ETH
     erc20_total_ether_sent_contract: "800000000000000000", // 0.8 ETH
@@ -576,10 +570,10 @@ function getMockAnalyticsData(): WalletAnalytics {
     erc20_uniq_rec_token_name: 8,
     erc20_most_sent_token_type: "USDC",
     erc20_most_rec_token_type: "WETH",
-
+    
     txn_frequency: 0.8,
     avg_txn_value: "210000000000000000", // 0.21 ETH
-
+    
     wallet_age_days: 30,
     risk_score: 0.15
   };

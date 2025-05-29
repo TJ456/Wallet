@@ -13,16 +13,16 @@ import (
 
 // FirewallHandler handles transaction firewall endpoints
 type FirewallHandler struct {
-	db *gorm.DB
-	aiService *services.AIService
+	db              *gorm.DB
+	aiService       *services.AIService
 	telegramService *services.TelegramService
 }
 
 // NewFirewallHandler creates a new firewall handler
 func NewFirewallHandler(db *gorm.DB, aiService *services.AIService, telegramService *services.TelegramService) *FirewallHandler {
 	return &FirewallHandler{
-		db: db,
-		aiService: aiService,
+		db:              db,
+		aiService:       aiService,
 		telegramService: telegramService,
 	}
 }
@@ -52,7 +52,7 @@ func (h *FirewallHandler) AnalyzeTransaction(c *gin.Context) {
 
 	// Save transaction to database
 	tx.Risk = risk
-	
+
 	// Send Telegram notification for suspicious or blocked transactions
 	if status != "safe" {
 		// Create a security alert
@@ -60,7 +60,7 @@ func (h *FirewallHandler) AnalyzeTransaction(c *gin.Context) {
 		if tx.Metadata != "" {
 			description += " - " + tx.Metadata
 		}
-		
+
 		alert := &models.SecurityAlert{
 			WalletID:  tx.FromAddress,
 			Type:      "suspicious_transaction",
@@ -69,7 +69,7 @@ func (h *FirewallHandler) AnalyzeTransaction(c *gin.Context) {
 			Timestamp: time.Now().Unix(),
 			Status:    "pending",
 		}
-		
+
 		// Try to send Telegram notification (don't block if it fails)
 		go func() {
 			err := h.telegramService.NotifySecurityAlert(tx.FromAddress, alert)
@@ -79,7 +79,7 @@ func (h *FirewallHandler) AnalyzeTransaction(c *gin.Context) {
 			}
 		}()
 	}
-	
+
 	tx.Status = status
 	if err := h.db.Create(&tx).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save transaction"})
@@ -88,23 +88,23 @@ func (h *FirewallHandler) AnalyzeTransaction(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": status,
-		"risk": risk,
+		"risk":   risk,
 	})
 }
 
 // GetStats returns transaction security statistics
 func (h *FirewallHandler) GetStats(c *gin.Context) {
 	var safeCount, suspiciousCount, blockedCount int64
-	
+
 	h.db.Model(&models.Transaction{}).Where("status = ?", "safe").Count(&safeCount)
 	h.db.Model(&models.Transaction{}).Where("status = ?", "suspicious").Count(&suspiciousCount)
 	h.db.Model(&models.Transaction{}).Where("status = ?", "blocked").Count(&blockedCount)
 
 	c.JSON(http.StatusOK, gin.H{
-		"safe": safeCount,
+		"safe":       safeCount,
 		"suspicious": suspiciousCount,
-		"blocked": blockedCount,
-		"total": safeCount + suspiciousCount + blockedCount,
+		"blocked":    blockedCount,
+		"total":      safeCount + suspiciousCount + blockedCount,
 	})
 }
 
@@ -116,9 +116,9 @@ func (h *FirewallHandler) GetTransactions(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 		return
 	}
-	
+
 	walletAddress := address.(string)
-	
+
 	var transactions []models.Transaction
 	result := h.db.Where("from_address = ? OR to_address = ?", walletAddress, walletAddress).
 		Order("created_at DESC").
@@ -137,33 +137,33 @@ func (h *FirewallHandler) GetTransactions(c *gin.Context) {
 func (h *FirewallHandler) GetAdminStats(c *gin.Context) {
 	// Get various statistics
 	var stats struct {
-		TotalTransactions int64 `json:"totalTransactions"`
-		BlockedTransactions int64 `json:"blockedTransactions"`
-		SuspiciousTransactions int64 `json:"suspiciousTransactions"`
-		SafeTransactions int64 `json:"safeTransactions"`
-		TotalReports int64 `json:"totalReports"`
-		VerifiedReports int64 `json:"verifiedReports"`
+		TotalTransactions       int64 `json:"totalTransactions"`
+		BlockedTransactions     int64 `json:"blockedTransactions"`
+		SuspiciousTransactions  int64 `json:"suspiciousTransactions"`
+		SafeTransactions        int64 `json:"safeTransactions"`
+		TotalReports            int64 `json:"totalReports"`
+		VerifiedReports         int64 `json:"verifiedReports"`
 		UniqueAddressesReported int64 `json:"uniqueAddressesReported"`
-		LastDayTransactions int64 `json:"lastDayTransactions"`
+		LastDayTransactions     int64 `json:"lastDayTransactions"`
 	}
-	
+
 	// Count different transaction types
 	h.db.Model(&models.Transaction{}).Count(&stats.TotalTransactions)
 	h.db.Model(&models.Transaction{}).Where("status = ?", "blocked").Count(&stats.BlockedTransactions)
 	h.db.Model(&models.Transaction{}).Where("status = ?", "suspicious").Count(&stats.SuspiciousTransactions)
 	h.db.Model(&models.Transaction{}).Where("status = ?", "safe").Count(&stats.SafeTransactions)
-	
+
 	// Count reports
 	h.db.Model(&models.Report{}).Count(&stats.TotalReports)
 	h.db.Model(&models.Report{}).Where("status = ?", "verified").Count(&stats.VerifiedReports)
-	
+
 	// Count unique reported addresses
 	h.db.Model(&models.Report{}).Distinct("reported_address").Count(&stats.UniqueAddressesReported)
-	
+
 	// Count transactions in the last 24 hours
 	yesterday := time.Now().Add(-24 * time.Hour)
 	h.db.Model(&models.Transaction{}).Where("created_at > ?", yesterday).Count(&stats.LastDayTransactions)
-	
+
 	// Return all stats
 	c.JSON(http.StatusOK, stats)
 }

@@ -202,16 +202,7 @@ const Index = () => {
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Security Score Card */}
-              <SecurityScore 
-                score={securityScore} 
-                level={shieldLevel}
-                onLevelUp={() => {
-                  toast({
-                    title: "🎉 Level Up!",
-                    description: `Congratulations! You've reached ${shieldLevel} level!`,
-                  });
-                }}
-              />
+              <SecurityScore />
 
               {/* Threat Status Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

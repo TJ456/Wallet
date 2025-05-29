@@ -6,6 +6,7 @@ import (
 	"Wallet/backend/services"
 	"log"
 	"net/http"
+	"os"
 
 	"gorm.io/gorm"
 
@@ -24,9 +25,17 @@ func SetupRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.En
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Wallet-Address", "X-Wallet-Signature", "X-Wallet-Message"},
 		AllowCredentials: true,
 	}))
-
 	// Initialize services
-	aiService := services.NewAIService()
+	ethRpcUrl := os.Getenv("ETH_RPC_URL")
+	if ethRpcUrl == "" {
+		ethRpcUrl = "https://eth-sepolia.g.alchemy.com/v2/your-api-key" // Default value
+	}
+	analyticsService, err := services.NewWalletAnalyticsService(db, ethRpcUrl)
+	if err != nil {
+		log.Fatalf("Failed to initialize analytics service: %v", err)
+	}
+
+	aiService := services.NewAIService(analyticsService)
 	blockchainService, err := services.NewBlockchainService()
 	if err != nil {
 		log.Fatalf("Failed to initialize blockchain service: %v", err)
@@ -37,9 +46,9 @@ func SetupRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.En
 	reportHandler := handlers.NewReportHandler(db, blockchainService, telegramService)
 	daoHandler := handlers.NewDAOHandler(db, blockchainService)
 	authHandler := handlers.NewAuthHandler(blockchainService)
+	analyticsHandler := handlers.NewWalletAnalyticsHandler(analyticsService)
 	// Apply rate limiting to all API routes
 	r.Use(middleware.RateLimitMiddleware())
-
 	// Public API routes
 	api := r.Group("/api")
 	{
@@ -53,6 +62,12 @@ func SetupRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.En
 
 		// Public DAO endpoints
 		api.GET("/dao/proposals", daoHandler.GetProposals)
+
+		// Wallet analytics endpoints
+		api.GET("/analytics/wallet/:address", analyticsHandler.GetWalletAnalytics)
+		api.GET("/analytics/risk/:address", analyticsHandler.GetWalletRiskScore)
+		api.POST("/analytics/bulk", analyticsHandler.GetBulkWalletAnalytics)
+		api.POST("/analytics/export", analyticsHandler.ExportMLDataset)
 	}
 
 	// Web3 authenticated routes (using wallet signature)

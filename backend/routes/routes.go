@@ -5,6 +5,7 @@ import (
 	"Wallet/backend/middleware"
 	"Wallet/backend/services"
 	"log"
+	"net/http"
 	"gorm.io/gorm"
 
 	"github.com/gin-contrib/cors"
@@ -12,7 +13,7 @@ import (
 )
 
 // SetupRouter configures all API routes
-func SetupRouter(db *gorm.DB) *gin.Engine {
+func SetupRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.Engine {
 	r := gin.Default()
 
 	// Configure CORS
@@ -31,8 +32,8 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	}
 
 	// Create handler instances with the database connection and services
-	firewallHandler := handlers.NewFirewallHandler(db, aiService)
-	reportHandler := handlers.NewReportHandler(db, blockchainService)
+	firewallHandler := handlers.NewFirewallHandler(db, aiService, telegramService) 
+	reportHandler := handlers.NewReportHandler(db, blockchainService, telegramService)
 	daoHandler := handlers.NewDAOHandler(db, blockchainService)
 	authHandler := handlers.NewAuthHandler(blockchainService)
 	// Apply rate limiting to all API routes
@@ -82,6 +83,37 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 		admin.PUT("/reports/:id/verify", reportHandler.VerifyReport)
 		admin.GET("/stats", firewallHandler.GetAdminStats)
 	}
+	
+	// Telegram webhook endpoint
+	// This doesn't need authentication as it's secured by the Telegram API
+	r.POST("/telegram/webhook", telegramService.GetWebhookHandler())
+	
+	// Telegram account linking endpoint (requires Web3 auth)
+	web3Auth.POST("/telegram/link", func(c *gin.Context) {
+		var req struct {
+			TelegramChatID string `json:"telegram_chat_id" binding:"required"`
+		}
+		
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+			return
+		}
+		
+		// Get user wallet address from auth middleware
+		address, exists := c.Get("address")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+			return
+		}
+		
+		// Link Telegram chat to wallet
+		telegramService.LinkWallet(req.TelegramChatID, address.(string))
+		
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Telegram account successfully linked to wallet",
+		})
+	})
 
 	return r
 }

@@ -12,6 +12,7 @@ import TransactionInterceptor from '@/components/TransactionInterceptor';
 import SecurityScore from '@/components/SecurityScore';
 import AILearningFeedback from '@/components/AILearningFeedback';
 import TelegramCompanion from '@/components/TelegramCompanion';
+import TelegramSettings from '@/components/TelegramSettings';
 
 const Index = () => {
   const [walletConnected, setWalletConnected] = useState(false);
@@ -369,39 +370,42 @@ const Index = () => {
                 </div>
               </CardContent>
             </Card>
-          )}
-
-          {activeTab === 'settings' && (
-            <Card className="bg-black/20 backdrop-blur-lg border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Security Settings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                    <div>
-                      <h4 className="text-white font-medium">Real-time Protection</h4>
-                      <p className="text-sm text-gray-400">Enable AI-powered transaction scanning</p>
+          )}          {activeTab === 'settings' && (
+            <div className="space-y-6">
+              <Card className="bg-black/20 backdrop-blur-lg border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-white">Security Settings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                      <div>
+                        <h4 className="text-white font-medium">Real-time Protection</h4>
+                        <p className="text-sm text-gray-400">Enable AI-powered transaction scanning</p>
+                      </div>
+                      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </div>
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                    <div>
-                      <h4 className="text-white font-medium">Auto-block High Risk</h4>
-                      <p className="text-sm text-gray-400">Automatically block transactions with 90%+ risk score</p>
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                      <div>
+                        <h4 className="text-white font-medium">Auto-block High Risk</h4>
+                        <p className="text-sm text-gray-400">Automatically block transactions with 90%+ risk score</p>
+                      </div>
+                      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </div>
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                    <div>
-                      <h4 className="text-white font-medium">Community Reports</h4>
-                      <p className="text-sm text-gray-400">Show warnings from community-reported contracts</p>
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                      <div>
+                        <h4 className="text-white font-medium">Community Reports</h4>
+                        <p className="text-sm text-gray-400">Show warnings from community-reported contracts</p>
+                      </div>
+                      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </div>
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+              
+              {/* Telegram Settings Integration */}
+              <TelegramSettings walletAddress={currentAddress} />
+            </div>
           )}
         </main>
       </div>

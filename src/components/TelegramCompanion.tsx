@@ -98,12 +98,26 @@ const TelegramCompanion: React.FC = () => {
                 </div>
               </div>
               
-              <div className="flex space-x-2">
-                <Button 
+              <div className="flex space-x-2">                <Button 
                   size="sm" 
                   className="flex-1 bg-cyan-600 hover:bg-cyan-700"
                   onClick={() => {
                     window.open('https://t.me/unhackable_wallet_bot', '_blank');
+                    // Track that user clicked on Telegram bot link
+                    try {
+                      fetch('/api/analytics/track', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          event: 'telegram_bot_open',
+                          source: 'companion_popup'
+                        }),
+                      });
+                    } catch (error) {
+                      console.error('Failed to track event:', error);
+                    }
                     setShowTooltip(false);
                   }}
                 >

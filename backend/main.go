@@ -3,6 +3,7 @@ package main
 import (
 	"Wallet/backend/config"
 	"Wallet/backend/routes"
+	"Wallet/backend/services"
 	"log"
 	"fmt"
 )
@@ -29,10 +30,24 @@ func main() {
 	if err := InitializeDatabase(db); err != nil {
 		log.Fatalf("Failed to initialize database schema: %v", err)
 	}
+	
+	// Initialize Telegram service
+	log.Println("Initializing Telegram bot service...")
+	telegramService := services.NewTelegramService(cfg.TelegramToken)
+	
+	// Set Telegram webhook URL if in production
+	if cfg.Environment == "production" {
+		webhookURL := "https://api.unhackablewallet.com/telegram/webhook"
+		if err := telegramService.SetWebhook(webhookURL); err != nil {
+			log.Printf("Warning: Failed to set Telegram webhook: %v", err)
+		}
+	} else {
+		log.Println("Telegram webhooks not set in development mode. Use a tunnel like ngrok for local testing.")
+	}
 
-	// Setup router
+	// Setup router with services
 	log.Println("Setting up API routes...")
-	r := routes.SetupRouter(db)
+	r := routes.SetupRouter(db, telegramService)
 	
 	// Print startup banner
 	fmt.Println(`

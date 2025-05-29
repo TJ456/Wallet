@@ -29,16 +29,19 @@ func SetupRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.En
 	ethRpcUrl := os.Getenv("ETH_RPC_URL")
 	if ethRpcUrl == "" {
 		ethRpcUrl = "https://eth-sepolia.g.alchemy.com/v2/your-api-key" // Default value
-	}
-	analyticsService, err := services.NewWalletAnalyticsService(db, ethRpcUrl)
+	}	analyticsService, err := services.NewWalletAnalyticsService(db, ethRpcUrl)
 	if err != nil {
-		log.Fatalf("Failed to initialize analytics service: %v", err)
+		log.Printf("Warning: Failed to initialize analytics service: %v", err)
+		// Create a default analytics service
+		analyticsService = &services.WalletAnalyticsService{DB: db}
 	}
 
 	aiService := services.NewAIService(analyticsService)
 	blockchainService, err := services.NewBlockchainService()
 	if err != nil {
-		log.Fatalf("Failed to initialize blockchain service: %v", err)
+		log.Printf("Warning: Failed to initialize blockchain service: %v", err)
+		// Create a mock blockchain service for development
+		blockchainService = &services.BlockchainService{}
 	}
 
 	// Create handler instances with the database connection and services

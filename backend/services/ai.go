@@ -11,53 +11,82 @@ import (
 
 // AIService provides machine learning model access for transaction analysis
 type AIService struct {
-	modelURL string
+	modelURL         string
+	analyticsService *WalletAnalyticsService
 }
 
 // NewAIService creates a new AI service instance
-func NewAIService() *AIService {
+func NewAIService(analyticsService *WalletAnalyticsService) *AIService {
 	// Get the model URL from environment
 	modelURL := os.Getenv("ML_MODEL_URL")
 	if modelURL == "" {
 		modelURL = "http://localhost:5000/predict" // default value
 	}
-	
+
 	return &AIService{
-		modelURL: modelURL,
+		modelURL:         modelURL,
+		analyticsService: analyticsService,
 	}
 }
 
 // AIModelRequest represents the request structure for AI model prediction
 type AIModelRequest struct {
-	FromAddress string  `json:"from_address"`
-	ToAddress   string  `json:"to_address"`
-	Value       float64 `json:"value"`
-	Network     string  `json:"network"`
-	Timestamp   int64   `json:"timestamp,omitempty"`
+	FromAddress string                 `json:"from_address"`
+	ToAddress   string                 `json:"to_address"`
+	Value       float64                `json:"value"`
+	Network     string                 `json:"network"`
+	Timestamp   int64                  `json:"timestamp,omitempty"`
 	Features    map[string]interface{} `json:"features,omitempty"`
 }
 
 // AIModelResponse represents the prediction response from the AI model
 type AIModelResponse struct {
-	Risk        float64 `json:"risk_score"`
-	Explanation string  `json:"explanation"`
-	Confidence  float64 `json:"confidence"`
+	Risk        float64            `json:"risk_score"`
+	Explanation string             `json:"explanation"`
+	Confidence  float64            `json:"confidence"`
 	Features    map[string]float64 `json:"feature_importance"`
 }
 
 // AnalyzeTransaction calls the ML model to analyze transaction risk
 func (s *AIService) AnalyzeTransaction(tx models.Transaction) (float64, error) {
+	// Get wallet analytics data for sender and recipient
+	senderAnalytics, err := s.analyticsService.GetWalletAnalytics(tx.FromAddress)
+	if err != nil {
+		// Log the error but continue with limited data
+		fmt.Printf("Failed to get sender analytics: %v\n", err)
+	}
+
+	recipientAnalytics, err := s.analyticsService.GetWalletAnalytics(tx.ToAddress)
+	if err != nil {
+		// Log the error but continue with limited data
+		fmt.Printf("Failed to get recipient analytics: %v\n", err)
+	}
+
 	// Prepare request payload
 	request := AIModelRequest{
 		FromAddress: tx.FromAddress,
-		ToAddress: tx.ToAddress,
-		Value: tx.Value,
-		Network: tx.Network,
-		Features: make(map[string]interface{}),
+		ToAddress:   tx.ToAddress,
+		Value:       tx.Value,
+		Network:     tx.Network,
+		Features:    make(map[string]interface{}),
 	}
 
-	// Add any extra features here if needed
-	// For example, historical transaction counts, user reputation, etc.
+	// Add analytics features for ML model
+	if senderAnalytics != nil {
+		// Add sender metrics with "sender_" prefix
+		senderFeatures := s.analyticsService.GetRiskPredictionInput(senderAnalytics)
+		for k, v := range senderFeatures {
+			request.Features["sender_"+k] = v
+		}
+	}
+
+	if recipientAnalytics != nil {
+		// Add recipient metrics with "recipient_" prefix
+		recipientFeatures := s.analyticsService.GetRiskPredictionInput(recipientAnalytics)
+		for k, v := range recipientFeatures {
+			request.Features["recipient_"+k] = v
+		}
+	}
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -112,6 +141,6 @@ func (s *AIService) IsAddressBlacklisted(address string) (bool, error) {
 		"0x1234567890abcdef1234567890abcdef12345678": true,
 		"0x0987654321fedcba0987654321fedcba09876543": true,
 	}
-	
+
 	return knownScamAddresses[address], nil
 }

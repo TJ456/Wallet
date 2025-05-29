@@ -51,12 +51,12 @@ func main() {
 
 	// Print startup banner
 	fmt.Println(`
-    __        __    _ _      _            _____              
-    \ \      / /_ _| | | ___| |_   ___   |  ___|_ _ ___ ___ 
+    __        __    _ _      _            _____
+    \ \      / /_ _| | | ___| |_   ___   |  ___|_ _ ___ ___
      \ \ /\ / / _' | | |/ _ \ __| / _ \  | |_ / _' / __/ _ \
       \ V  V / (_| | | |  __/ |_ |  __/  |  _| (_| \__ \  __/
        \_/\_/ \__,_|_|_|\___|\__| \___|  |_|  \__,_|___/\___|
-                                                         
+
     Wallet Firewall API Server | Secure Transactions`)
 	fmt.Printf("    Version 1.0.0 | Environment: %s\n\n", cfg.Environment)
 

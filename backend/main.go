@@ -30,10 +30,9 @@ func main() {
 	if err := InitializeDatabase(db); err != nil {
 		log.Fatalf("Failed to initialize database schema: %v", err)
 	}
-
 	// Initialize Telegram service
 	log.Println("Initializing Telegram bot service...")
-	telegramService := services.NewTelegramService(cfg.TelegramToken)
+	telegramService := services.NewTelegramService(cfg.TelegramToken, db)
 
 	// Set Telegram webhook URL if in production
 	if cfg.Environment == "production" {
@@ -44,10 +43,9 @@ func main() {
 	} else {
 		log.Println("Telegram webhooks not set in development mode. Use a tunnel like ngrok for local testing.")
 	}
-
 	// Setup router with services
 	log.Println("Setting up API routes...")
-	r := routes.SetupRouter(db, telegramService)
+	r := routes.SetupMainRouter(db, telegramService)
 
 	// Print startup banner
 	fmt.Println(`

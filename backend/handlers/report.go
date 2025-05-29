@@ -3,6 +3,7 @@ package handlers
 import (
 	"Wallet/backend/models"
 	"Wallet/backend/services"
+	"log"
 	"net/http"
 	"time"
 
@@ -14,13 +15,15 @@ import (
 type ReportHandler struct {
 	db *gorm.DB
 	blockchainService *services.BlockchainService
+	telegramService *services.TelegramService
 }
 
 // NewReportHandler creates a new report handler
-func NewReportHandler(db *gorm.DB, blockchainService *services.BlockchainService) *ReportHandler {
+func NewReportHandler(db *gorm.DB, blockchainService *services.BlockchainService, telegramService *services.TelegramService) *ReportHandler {
 	return &ReportHandler{
 		db: db,
 		blockchainService: blockchainService,
+		telegramService: telegramService,
 	}
 }
 
@@ -64,6 +67,15 @@ func (h *ReportHandler) CreateReport(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save report: " + err.Error()})
 		return
 	}
+	
+	// Send Telegram notification about the report
+	go func() {
+		err := h.telegramService.NotifyScamReport(report.ReporterAddress, &report)
+		if err != nil {
+			// Log the error but don't fail the request
+			log.Printf("Failed to send Telegram notification for scam report: %v", err)
+		}
+	}()
 
 	c.JSON(http.StatusCreated, gin.H{
 		"id": report.ID,

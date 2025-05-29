@@ -3,6 +3,7 @@ package handlers
 import (
 	"Wallet/backend/models"
 	"Wallet/backend/services"
+	"log"
 	"net/http"
 	"time"
 
@@ -14,13 +15,15 @@ import (
 type FirewallHandler struct {
 	db *gorm.DB
 	aiService *services.AIService
+	telegramService *services.TelegramService
 }
 
 // NewFirewallHandler creates a new firewall handler
-func NewFirewallHandler(db *gorm.DB, aiService *services.AIService) *FirewallHandler {
+func NewFirewallHandler(db *gorm.DB, aiService *services.AIService, telegramService *services.TelegramService) *FirewallHandler {
 	return &FirewallHandler{
 		db: db,
 		aiService: aiService,
+		telegramService: telegramService,
 	}
 }
 
@@ -49,6 +52,34 @@ func (h *FirewallHandler) AnalyzeTransaction(c *gin.Context) {
 
 	// Save transaction to database
 	tx.Risk = risk
+	
+	// Send Telegram notification for suspicious or blocked transactions
+	if status != "safe" {
+		// Create a security alert
+		description := "Suspicious transaction to " + tx.ToAddress
+		if tx.Metadata != "" {
+			description += " - " + tx.Metadata
+		}
+		
+		alert := &models.SecurityAlert{
+			WalletID:  tx.FromAddress,
+			Type:      "suspicious_transaction",
+			Severity:  status,
+			Details:   description,
+			Timestamp: time.Now().Unix(),
+			Status:    "pending",
+		}
+		
+		// Try to send Telegram notification (don't block if it fails)
+		go func() {
+			err := h.telegramService.NotifySecurityAlert(tx.FromAddress, alert)
+			if err != nil {
+				// Log the error but continue processing
+				log.Printf("Failed to send Telegram notification: %v", err)
+			}
+		}()
+	}
+	
 	tx.Status = status
 	if err := h.db.Create(&tx).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save transaction"})

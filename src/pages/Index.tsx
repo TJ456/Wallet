@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, AlertTriangle, CheckCircle, Zap, Users, FileText, Settings } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle, Zap, Users, FileText, Settings, PieChart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import TransactionInterceptor from '@/components/TransactionInterceptor';
 import SecurityScore from '@/components/SecurityScore';
 import AILearningFeedback from '@/components/AILearningFeedback';
 import TelegramCompanion from '@/components/TelegramCompanion';
+import TelegramSettings from '@/components/TelegramSettings';
+import WalletAnalytics from '@/components/WalletAnalytics';
 
 const Index = () => {
   const [walletConnected, setWalletConnected] = useState(false);
@@ -177,6 +179,7 @@ const Index = () => {
           <nav className="p-6 space-y-2">
             {[
               { id: 'overview', label: 'Overview', icon: Shield },
+              { id: 'analytics', label: 'Wallet Analytics', icon: PieChart },
               { id: 'dao', label: 'DAO Voting', icon: Users },
               { id: 'reports', label: 'Threat Reports', icon: FileText },
               { id: 'settings', label: 'Settings', icon: Settings },
@@ -279,6 +282,8 @@ const Index = () => {
             </div>
           )}
 
+          {activeTab === 'analytics' && <WalletAnalytics walletAddress={currentAddress} />}
+          
           {activeTab === 'dao' && (
             <div className="space-y-6">
               {/* Enhanced DAO Panel */}
@@ -369,39 +374,42 @@ const Index = () => {
                 </div>
               </CardContent>
             </Card>
-          )}
-
-          {activeTab === 'settings' && (
-            <Card className="bg-black/20 backdrop-blur-lg border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Security Settings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                    <div>
-                      <h4 className="text-white font-medium">Real-time Protection</h4>
-                      <p className="text-sm text-gray-400">Enable AI-powered transaction scanning</p>
+          )}          {activeTab === 'settings' && (
+            <div className="space-y-6">
+              <Card className="bg-black/20 backdrop-blur-lg border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-white">Security Settings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                      <div>
+                        <h4 className="text-white font-medium">Real-time Protection</h4>
+                        <p className="text-sm text-gray-400">Enable AI-powered transaction scanning</p>
+                      </div>
+                      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </div>
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                    <div>
-                      <h4 className="text-white font-medium">Auto-block High Risk</h4>
-                      <p className="text-sm text-gray-400">Automatically block transactions with 90%+ risk score</p>
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                      <div>
+                        <h4 className="text-white font-medium">Auto-block High Risk</h4>
+                        <p className="text-sm text-gray-400">Automatically block transactions with 90%+ risk score</p>
+                      </div>
+                      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </div>
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                    <div>
-                      <h4 className="text-white font-medium">Community Reports</h4>
-                      <p className="text-sm text-gray-400">Show warnings from community-reported contracts</p>
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                      <div>
+                        <h4 className="text-white font-medium">Community Reports</h4>
+                        <p className="text-sm text-gray-400">Show warnings from community-reported contracts</p>
+                      </div>
+                      <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </div>
-                    <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+              
+              {/* Telegram Settings Integration */}
+              <TelegramSettings walletAddress={currentAddress} />
+            </div>
           )}
         </main>
       </div>

@@ -6,16 +6,16 @@ import (
 
 // DAOProposal represents a governance proposal in the DAO
 type DAOProposal struct {
-	ID           uint      `json:"id" gorm:"primaryKey"`
-	Title        string    `json:"title"`
-	Description  string    `json:"description"`
-	CreatorAddress string  `json:"creatorAddress" gorm:"index"`
-	CreatedAt    time.Time `json:"createdAt"`
-	EndTime      time.Time `json:"endTime"`
-	Status       string    `json:"status"` // "active", "passed", "rejected", "executed"
-	VotesFor     int       `json:"votesFor"`
-	VotesAgainst int       `json:"votesAgainst"`
-	ExecutionData string   `json:"executionData"` // contract call data if proposal passes
+	ID             uint      `json:"id" gorm:"primaryKey"`
+	Title          string    `json:"title"`
+	Description    string    `json:"description"`
+	CreatorAddress string    `json:"creatorAddress" gorm:"index;column:proposer_address"`
+	CreatedAt      time.Time `json:"createdAt"`
+	EndTime        time.Time `json:"endTime"`
+	Status         string    `json:"status"` // "active", "passed", "rejected", "executed"
+	VotesFor       int       `json:"votesFor"`
+	VotesAgainst   int       `json:"votesAgainst"`
+	ExecutionData  string    `json:"executionData"` // contract call data if proposal passes
 }
 
 // DAOVote represents a vote cast by a user for a DAO proposal

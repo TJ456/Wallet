@@ -2,13 +2,13 @@
 // Handles wallet connection, transfers, and security features
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription, 
-  CardContent, 
-  CardFooter 
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,10 @@ import contractService from '@/web3/contract';
 import { shortenAddress, isValidAddress, formatEth } from '@/web3/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { reportScam, voteOnProposal, sendTransaction } from '@/web3/contract';
+import TransactionForm from '@/components/TransactionForm';
+import WalletInfo from '@/components/WalletInfo';
+import { useToast } from '@/hooks/use-toast';
+import { Grid, Wallet, Send, Shield, Users } from 'lucide-react';
 
 interface WalletAppProps {
   onAddressChanged?: (address: string | null) => void;
@@ -31,27 +35,32 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
   const [balance, setBalance] = useState<string>('0');
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // State for transfers
+
+  // State for transfers (legacy - keeping for backward compatibility)
   const [recipient, setRecipient] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [isSending, setIsSending] = useState<boolean>(false);
   const [txHash, setTxHash] = useState<string | null>(null);
-  
+
   // State for security checks
   const [isSafe, setIsSafe] = useState<boolean>(true);
   const [scamScore, setScamScore] = useState<number>(0);
-  
+
+  // New state for enhanced UI
+  const [activeView, setActiveView] = useState<'overview' | 'send' | 'report' | 'vote'>('overview');
+
+  const { toast } = useToast();
+
   // State for scam reporting
   const [scamAddress, setScamAddress] = useState<string>('');
   const [scamReason, setScamReason] = useState<string>('');
   const [isReporting, setIsReporting] = useState<boolean>(false);
-  
+
   // State for voting
   const [proposalId, setProposalId] = useState<string>('');
   const [voteSupport, setVoteSupport] = useState<boolean>(true);
   const [isVoting, setIsVoting] = useState<boolean>(false);
-  
+
   // Connect wallet on component mount if previously connected
   useEffect(() => {
     const checkConnection = async () => {
@@ -70,29 +79,29 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
         }
       }
     };
-    
+
     checkConnection();
-    
+
     // Listen for wallet events
     window.addEventListener('wallet_disconnected', handleDisconnect);
     window.addEventListener('wallet_accountChanged', handleAccountChange);
-    
+
     return () => {
       window.removeEventListener('wallet_disconnected', handleDisconnect);
       window.removeEventListener('wallet_accountChanged', handleAccountChange);
     };
   }, [onAddressChanged]);
-  
+
   // Handle wallet connect button click
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
       setError(null);
-      
+
       const connectedAddress = await walletConnector.connect();
       setAddress(connectedAddress);
       await updateBalance();
-      
+
       if (onAddressChanged) onAddressChanged(connectedAddress);
     } catch (err: any) {
       console.error("Connection error:", err);
@@ -101,7 +110,7 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
       setIsConnecting(false);
     }
   };
-  
+
   // Handle wallet disconnect
   const handleDisconnect = () => {
     walletConnector.disconnect();
@@ -109,7 +118,7 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
     setBalance('0');
     if (onAddressChanged) onAddressChanged(null);
   };
-  
+
   // Handle account change event
   const handleAccountChange = (event: Event) => {
     const customEvent = event as CustomEvent;
@@ -118,7 +127,7 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
     updateBalance();
     if (onAddressChanged) onAddressChanged(newAddress);
   };
-  
+
   // Update ETH balance
   const updateBalance = async () => {
     if (walletConnector.address) {
@@ -130,14 +139,72 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
       }
     }
   };
-  
+
+  // Handle scam report submission
+  const handleScamReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scamAddress || !scamReason) return;
+
+    setIsReporting(true);
+    try {
+      await contractService.reportScam(scamAddress, scamReason, '');
+      toast({
+        title: "✅ Report Submitted",
+        description: "Thank you for helping protect the community!",
+        variant: "default"
+      });
+      setScamAddress('');
+      setScamReason('');
+      setActiveView('overview');
+    } catch (error: any) {
+      toast({
+        title: "❌ Report Failed",
+        description: error.message || "Failed to submit report",
+        variant: "destructive"
+      });
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
+  // Handle vote submission
+  const handleVoteSubmit = async (support: boolean) => {
+    if (!proposalId) return;
+
+    setIsVoting(true);
+    try {
+      await contractService.voteOnScamReport(proposalId, support);
+      toast({
+        title: "🗳️ Vote Submitted",
+        description: `Your ${support ? 'support' : 'opposition'} vote has been recorded.`,
+        variant: "default"
+      });
+      setProposalId('');
+      setActiveView('overview');
+    } catch (error: any) {
+      toast({
+        title: "❌ Vote Failed",
+        description: error.message || "Failed to submit vote",
+        variant: "destructive"
+      });
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
+  // Legacy handler for form compatibility
+  const handleVote = (e: React.FormEvent) => {
+    e.preventDefault();
+    // This is handled by handleVoteSubmit buttons
+  };
+
   // Check if recipient address is safe (not reported as scam)
   const checkRecipientSafety = async (address: string) => {
     if (isValidAddress(address)) {
       try {
         const isScam = await contractService.isScamAddress(address);
         const score = await contractService.getScamScore(address);
-        
+
         setIsSafe(!isScam);
         setScamScore(score);
       } catch (err) {
@@ -152,12 +219,12 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
       setScamScore(0);
     }
   };
-  
+
   // Handle recipient input change
   const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newRecipient = e.target.value;
     setRecipient(newRecipient);
-    
+
     // Check safety if address looks valid
     if (newRecipient.length > 30) {
       checkRecipientSafety(newRecipient);
@@ -166,23 +233,23 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
       setScamScore(0);
     }
   };
-  
+
   // Handle send transaction
   const handleSendTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!address || !isValidAddress(recipient) || !amount || parseFloat(amount) <= 0) {
       setError("Please enter a valid recipient address and amount");
       return;
     }
-    
+
     try {
       setIsSending(true);
       setError(null);
-      
+
       // Check recipient safety one more time before sending
       await checkRecipientSafety(recipient);
-      
+
       if (!isSafe && scamScore > 50) {
         if (!window.confirm(`WARNING: This address has been reported as potentially unsafe (Scam score: ${scamScore}/100). Do you still want to proceed?`)) {
           setIsSending(false);
@@ -194,18 +261,18 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
       if (!hasBalance) {
         throw new Error("Insufficient balance for this transaction (including gas)");
       }
-      
+
       // Use the standalone function for secure transfer
       const hash = await sendTransaction(recipient, amount);
       setTxHash(hash);
-      
+
       // Clear form and update balance
       setRecipient('');
       setAmount('');
-      
+
       // Set a timeout to clear the transaction hash display after a few seconds
       setTimeout(() => setTxHash(null), 5000);
-      
+
       await updateBalance();
     } catch (err: any) {
       console.error("Transaction error:", err);
@@ -217,29 +284,29 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
     // Handle report scam submission
   const handleReportScam = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!address || !isValidAddress(scamAddress) || !scamReason) {
       setError("Please enter a valid address and reason");
       return;
     }
-    
+
     try {
       setIsReporting(true);
       setError(null);
-      
+
       // First verify contract is valid
       const isContractValid = await contractService.verifyContract();
       if (!isContractValid) {
         throw new Error("Cannot connect to the contract. Please check your network connection.");
       }
-      
+
       const hash = await reportScam(scamAddress, scamReason);
       setTxHash(hash);
-      
+
       // Clear form
       setScamAddress('');
       setScamReason('');
-      
+
       // Set success message
       setTimeout(() => setTxHash(null), 5000);
     } catch (err: any) {
@@ -252,34 +319,34 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
     // Handle vote submission
   const handleVote = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!address || !proposalId) {
       setError("Please enter a valid proposal ID");
       return;
     }
-    
+
     try {
       setIsVoting(true);
       setError(null);
-      
+
       // First verify contract is valid
       const isContractValid = await contractService.verifyContract();
       if (!isContractValid) {
         throw new Error("Cannot connect to the contract. Please check your network connection.");
       }
-      
+
       // Show confirmation dialog
       if (!window.confirm(`Are you sure you want to vote ${voteSupport ? 'IN SUPPORT OF' : 'AGAINST'} proposal ${proposalId}?`)) {
         setIsVoting(false);
         return;
       }
-      
+
       const hash = await voteOnProposal(proposalId, voteSupport);
       setTxHash(hash);
-      
+
       // Clear form
       setProposalId('');
-      
+
       // Set success message
       setTimeout(() => setTxHash(null), 5000);
     } catch (err: any) {
@@ -293,206 +360,306 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
   // Render safety warning badge
   const renderSafetyBadge = () => {
     if (!recipient || recipient.length < 30) return null;
-    
+
     if (!isValidAddress(recipient)) {
       return <Badge variant="outline" className="bg-yellow-100">Invalid Address</Badge>;
     }
-    
+
     if (!isSafe) {
       return <Badge variant="destructive">Reported as Unsafe!</Badge>;
     }
-    
+
     if (scamScore > 30) {
       return <Badge variant="secondary" className="bg-yellow-100">Caution: Score {scamScore}/100</Badge>;
     }
-    
+
     return <Badge variant="outline" className="bg-green-100">Address Looks Safe</Badge>;
   };
-  
+
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Unhackable Wallet</CardTitle>
-        <CardDescription>Secure Ethereum transactions with scam protection</CardDescription>
-      </CardHeader>
-      
-      <CardContent>
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        
-        {!address ? (
-          <Button 
-            onClick={handleConnect} 
-            className="w-full" 
-            disabled={isConnecting}
-          >
-            {isConnecting ? "Connecting..." : "Connect Wallet"}
-          </Button>
-        ) : (
-          <>
-            <div className="flex items-center justify-between mb-4 p-3 bg-secondary rounded-lg">
+    <div className="w-full max-w-7xl mx-auto p-4 space-y-6">
+      {/* Header Section */}
+      <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Shield className="h-8 w-8" />
               <div>
-                <p className="text-sm font-medium">Connected Address</p>
-                <p className="font-mono">{shortenAddress(address)}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-medium">Balance</p>
-                <p>{parseFloat(balance).toFixed(4)} ETH</p>
+                <CardTitle className="text-2xl">Unhackable Wallet</CardTitle>
+                <CardDescription className="text-blue-100">
+                  Secure Ethereum transactions with AI-powered scam protection
+                </CardDescription>
               </div>
             </div>
-            
-            <Tabs defaultValue="send" className="mt-4">
-              <TabsList className="grid grid-cols-3 mb-4">
-                <TabsTrigger value="send">Send</TabsTrigger>
-                <TabsTrigger value="report">Report</TabsTrigger>
-                <TabsTrigger value="vote">Vote</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="send">
-                <form onSubmit={handleSendTransaction}>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="recipient">Recipient Address</Label>
-                      <Input
-                        id="recipient"
-                        placeholder="0x..."
-                        value={recipient}
-                        onChange={handleRecipientChange}
-                        required
-                      />
-                      <div className="h-6">{renderSafetyBadge()}</div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="amount">Amount (ETH)</Label>
-                      <Input
-                        id="amount"
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        placeholder="0.0"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        required
-                      />
-                    </div>
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={isSending}
-                    >
-                      {isSending ? "Sending..." : "Send Transaction"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-              
-              <TabsContent value="report">
-                <form onSubmit={handleReportScam}>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="scamAddress">Scammer Address</Label>
-                      <Input
-                        id="scamAddress"
-                        placeholder="0x..."
-                        value={scamAddress}
-                        onChange={(e) => setScamAddress(e.target.value)}
-                        required
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="scamReason">Reason</Label>
-                      <Input
-                        id="scamReason"
-                        placeholder="Describe the scam..."
-                        value={scamReason}
-                        onChange={(e) => setScamReason(e.target.value)}
-                        required
-                      />
-                    </div>
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={isReporting}
-                    >
-                      {isReporting ? "Reporting..." : "Report Scammer"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-              
-              <TabsContent value="vote">
-                <form onSubmit={handleVote}>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="proposalId">Proposal ID</Label>
-                      <Input
-                        id="proposalId"
-                        placeholder="Proposal ID or Hash"
-                        value={proposalId}
-                        onChange={(e) => setProposalId(e.target.value)}
-                        required
-                      />
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Button 
-                        type="button" 
-                        variant={voteSupport ? "default" : "outline"}
-                        onClick={() => setVoteSupport(true)}
-                        className="flex-1"
-                      >
-                        Support
-                      </Button>
-                      <Button 
-                        type="button" 
-                        variant={!voteSupport ? "default" : "outline"}
-                        onClick={() => setVoteSupport(false)}
-                        className="flex-1"
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={isVoting}
-                    >
-                      {isVoting ? "Voting..." : "Submit Vote"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-            </Tabs>
-            
-            {txHash && (
-              <p className="text-sm text-center mt-4">
-                Transaction submitted: {shortenAddress(txHash, 6)}
-              </p>
+            {address && (
+              <Badge variant="secondary" className="bg-white/20 text-white">
+                Connected
+              </Badge>
             )}
-          </>
-        )}
-      </CardContent>
-      
-      {address && (
-        <CardFooter className="flex justify-end">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleDisconnect}
-          >
-            Disconnect
-          </Button>
-        </CardFooter>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Error Display */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
-    </Card>
+
+      {/* Main Content */}
+      {!address ? (
+        <Card className="max-w-md mx-auto">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <Wallet className="h-16 w-16 mx-auto text-gray-400" />
+              <div>
+                <h3 className="text-lg font-semibold">Connect Your Wallet</h3>
+                <p className="text-gray-600">Connect your MetaMask wallet to get started</p>
+              </div>
+              <Button
+                onClick={handleConnect}
+                className="w-full"
+                disabled={isConnecting}
+                size="lg"
+              >
+                {isConnecting ? "Connecting..." : "Connect Wallet"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {/* Navigation Tabs */}
+          <Card>
+            <CardContent className="pt-6">
+              <Tabs value={activeView} onValueChange={(value) => setActiveView(value as any)}>
+                <TabsList className="grid grid-cols-4 w-full">
+                  <TabsTrigger value="overview" className="flex items-center space-x-2">
+                    <Grid className="h-4 w-4" />
+                    <span className="hidden sm:inline">Overview</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="send" className="flex items-center space-x-2">
+                    <Send className="h-4 w-4" />
+                    <span className="hidden sm:inline">Send</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="report" className="flex items-center space-x-2">
+                    <Shield className="h-4 w-4" />
+                    <span className="hidden sm:inline">Report</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="vote" className="flex items-center space-x-2">
+                    <Users className="h-4 w-4" />
+                    <span className="hidden sm:inline">Vote</span>
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* Overview Tab */}
+                <TabsContent value="overview" className="mt-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Wallet Info - Full width on mobile, 1 column on desktop */}
+                    <div className="lg:col-span-1">
+                      <WalletInfo
+                        showNetworkInfo={true}
+                        autoRefresh={true}
+                        className="h-fit"
+                      />
+                    </div>
+
+                    {/* Quick Actions - 2 columns on desktop */}
+                    <div className="lg:col-span-2 space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Quick Actions</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Button
+                              onClick={() => setActiveView('send')}
+                              className="h-20 flex flex-col items-center justify-center space-y-2"
+                              variant="outline"
+                            >
+                              <Send className="h-6 w-6" />
+                              <span>Send Transaction</span>
+                            </Button>
+                            <Button
+                              onClick={() => setActiveView('report')}
+                              className="h-20 flex flex-col items-center justify-center space-y-2"
+                              variant="outline"
+                            >
+                              <Shield className="h-6 w-6" />
+                              <span>Report Scam</span>
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Recent Activity */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Recent Activity</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {txHash ? (
+                            <div className="text-sm">
+                              <p className="text-gray-600">Last transaction:</p>
+                              <p className="font-mono">{shortenAddress(txHash, 6)}</p>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500">No recent transactions</p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Send Tab */}
+                <TabsContent value="send" className="mt-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Wallet Info */}
+                    <div className="lg:col-span-1">
+                      <WalletInfo
+                        showNetworkInfo={true}
+                        autoRefresh={true}
+                        className="h-fit"
+                      />
+                    </div>
+
+                    {/* Transaction Form */}
+                    <div className="lg:col-span-2">
+                      <TransactionForm
+                        onTransactionComplete={(txHash) => {
+                          setTxHash(txHash);
+                          updateBalance();
+                          toast({
+                            title: "🎉 Transaction Complete!",
+                            description: `Transaction ${txHash.slice(0, 10)}... has been confirmed.`,
+                            variant: "default"
+                          });
+                          // Switch back to overview after successful transaction
+                          setTimeout(() => setActiveView('overview'), 2000);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* Report Tab */}
+                <TabsContent value="report" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Report Scam Address</CardTitle>
+                      <CardDescription>
+                        Help protect the community by reporting suspicious addresses
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleScamReport} className="space-y-4">
+                        <div>
+                          <Label htmlFor="scam-address">Suspicious Address</Label>
+                          <Input
+                            id="scam-address"
+                            placeholder="0x..."
+                            value={scamAddress}
+                            onChange={(e) => setScamAddress(e.target.value)}
+                            disabled={isReporting}
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="scam-reason">Reason for Report</Label>
+                          <Input
+                            id="scam-reason"
+                            placeholder="Describe the suspicious activity..."
+                            value={scamReason}
+                            onChange={(e) => setScamReason(e.target.value)}
+                            disabled={isReporting}
+                          />
+                        </div>
+
+                        <Button
+                          type="submit"
+                          className="w-full"
+                          disabled={isReporting || !scamAddress || !scamReason}
+                        >
+                          {isReporting ? "Submitting Report..." : "Submit Report"}
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Vote Tab */}
+                <TabsContent value="vote" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>DAO Voting</CardTitle>
+                      <CardDescription>
+                        Vote on community scam reports
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleVote} className="space-y-4">
+                        <div>
+                          <Label htmlFor="proposal-id">Proposal ID</Label>
+                          <Input
+                            id="proposal-id"
+                            placeholder="Enter proposal ID..."
+                            value={proposalId}
+                            onChange={(e) => setProposalId(e.target.value)}
+                            disabled={isVoting}
+                          />
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <Button
+                            type="button"
+                            onClick={() => handleVoteSubmit(true)}
+                            className="flex-1 bg-green-600 hover:bg-green-700"
+                            disabled={isVoting || !proposalId}
+                          >
+                            {isVoting ? "Voting..." : "Vote For"}
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => handleVoteSubmit(false)}
+                            className="flex-1 bg-red-600 hover:bg-red-700"
+                            disabled={isVoting || !proposalId}
+                          >
+                            {isVoting ? "Voting..." : "Vote Against"}
+                          </Button>
+                        </div>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Disconnect Button */}
+      {address && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-gray-600">Connected to wallet</p>
+                <p className="font-mono text-sm">{shortenAddress(address)}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDisconnect}
+              >
+                Disconnect
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 };
 

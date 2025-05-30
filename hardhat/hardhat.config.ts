@@ -47,14 +47,13 @@ const config: HardhatUserConfig = {
         ? [PRIVATE_KEY] 
         : [],
       chainId: 80001
-    },
-    // Monad testnet
+    },    // Monad testnet
     monad_testnet: {
-      url: process.env.MONAD_RPC_URL || "https://rpc.testnet.monad.xyz",
+      url: process.env.MONAD_RPC_URL || "https://testnet-rpc.monad.xyz",
       accounts: PRIVATE_KEY !== "0x0000000000000000000000000000000000000000000000000000000000000000" 
         ? [PRIVATE_KEY] 
         : [],
-      chainId: 2023
+      chainId: 10143
     }
   },
   etherscan: {
@@ -65,14 +64,13 @@ const config: HardhatUserConfig = {
       polygon: POLYGONSCAN_API_KEY,
       polygonMumbai: POLYGONSCAN_API_KEY,
       monad_testnet: MONADSCAN_API_KEY
-    },
-    customChains: [
+    },    customChains: [
       {
         network: "monad_testnet",
-        chainId: 2023,
+        chainId: 10143,
         urls: {
-          apiURL: "https://explorer-api-testnet.monad.xyz/api",
-          browserURL: "https://explorer.testnet.monad.xyz"
+          apiURL: "https://testnet.monadexplorer.com/api",
+          browserURL: "https://testnet.monadexplorer.com"
         }
       }
     ]

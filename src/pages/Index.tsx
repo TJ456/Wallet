@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, AlertTriangle, CheckCircle, Zap, Users, FileText, Settings, PieChart, Send, Bug } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Shield, AlertTriangle, CheckCircle, Zap, Users, FileText, Settings, PieChart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,27 +15,31 @@ import AILearningFeedback from '@/components/AILearningFeedback';
 import TelegramCompanion from '@/components/TelegramCompanion';
 import TelegramSettings from '@/components/TelegramSettings';
 import WalletAnalytics from '@/components/WalletAnalytics';
-import ApiErrorExample from '@/components/ApiErrorExample';
-import TransactionForm from '@/components/TransactionForm';
-import WalletInfo from '@/components/WalletInfo';
 
 const Index = () => {
   const [walletConnected, setWalletConnected] = useState(false);
   const [currentAddress, setCurrentAddress] = useState('');
   const [threatLevel, setThreatLevel] = useState<'safe' | 'warning' | 'danger'>('safe');
   const [showInterceptor, setShowInterceptor] = useState(false);
+  const [transactionDetails, setTransactionDetails] = useState({
+    fromAddress: '',
+    toAddress: '',
+    value: 0,
+    gasPrice: 0
+  });
+  const [suspiciousAddress, setSuspiciousAddress] = useState('0xa12066091c6F636505Bd64F2160EA1884142B38c');  // Add this line
   const [activeTab, setActiveTab] = useState('overview');
   const [aiScansToday, setAiScansToday] = useState(247);
   const [blockedThreats, setBlockedThreats] = useState(15);
   const [savedAmount, setSavedAmount] = useState(12450);
-
+  
   // New gamification states
   const [securityScore, setSecurityScore] = useState(67);
   const [shieldLevel, setShieldLevel] = useState('Defender');
   const [showAIFeedback, setShowAIFeedback] = useState(false);
   const [lastAction, setLastAction] = useState<'vote' | 'report' | 'block' | 'scan'>('scan');
   const [isProcessing, setIsProcessing] = useState(false);
-
+  
   const { toast } = useToast();
 
   // Reset threat level after some time for demo purposes
@@ -62,19 +67,27 @@ const Index = () => {
 
   const simulateScamTransaction = () => {
     if (isProcessing) return;
-
+    
     console.log('Simulating scam transaction...');
     setIsProcessing(true);
+    
+    // Set transaction details for the interceptor
+    setTransactionDetails({
+      fromAddress: currentAddress || '0x742d35Cc6634C0532925a3b8D4C9db96c4b4d8b',
+      toAddress: '0xa12066091c6F636505Bd64F2160EA1884142B38c',
+      value: 0.00000000000001,
+      gasPrice: 20
+    });
 
     setAiScansToday(prev => prev + 1);
     setThreatLevel('danger');
     setLastAction('scan');
     setShowAIFeedback(true);
-
+    
     toast({
-      title: "⚠️ Threat Detected!",
-      description: "Suspicious transaction intercepted by AI scanner.",
-      variant: "destructive",
+      title: "⚠️ Analyzing Transaction",
+      description: "ML model is analyzing the transaction...",
+      variant: "default",
     });
 
     setTimeout(() => {
@@ -85,16 +98,16 @@ const Index = () => {
 
   const handleBlockTransaction = () => {
     console.log('Transaction blocked by user');
-
+    
     setBlockedThreats(prev => prev + 1);
     setSavedAmount(prev => prev + Math.floor(Math.random() * 5000) + 1000);
     setSecurityScore(prev => Math.min(100, prev + 3));
     setLastAction('block');
     setShowAIFeedback(true);
-
+    
     setShowInterceptor(false);
     setIsProcessing(false);
-
+    
     toast({
       title: "🛡️ Transaction Blocked",
       description: "Malicious transaction successfully blocked. Your funds are safe!",
@@ -109,13 +122,13 @@ const Index = () => {
     console.log('Interceptor closed');
     setShowInterceptor(false);
     setIsProcessing(false);
-
+    
     toast({
       title: "⚠️ Transaction Signed",
       description: "You chose to proceed with the risky transaction.",
       variant: "destructive",
     });
-
+    
     setTimeout(() => {
       setThreatLevel('warning');
     }, 1000);
@@ -126,7 +139,7 @@ const Index = () => {
     setSecurityScore(prev => Math.min(100, prev + 2));
     setLastAction('vote');
     setShowAIFeedback(true);
-
+    
     toast({
       title: "🗳️ Vote Recorded",
       description: `Your ${vote} vote has been submitted to the DAO.`,
@@ -137,7 +150,7 @@ const Index = () => {
     setSecurityScore(prev => Math.min(100, prev + 5));
     setLastAction('report');
     setShowAIFeedback(true);
-
+    
     toast({
       title: "📊 Report Submitted",
       description: "Thank you for helping secure the Web3 community!",
@@ -160,7 +173,7 @@ const Index = () => {
                 <p className="text-sm text-gray-400">AI-Powered Web3 Guardian</p>
               </div>
             </div>
-            <WalletConnect
+            <WalletConnect 
               onConnect={(address) => {
                 setWalletConnected(true);
                 setCurrentAddress(address);
@@ -182,11 +195,9 @@ const Index = () => {
           <nav className="p-6 space-y-2">
             {[
               { id: 'overview', label: 'Overview', icon: Shield },
-              { id: 'send', label: 'Send Transaction', icon: Send },
               { id: 'analytics', label: 'Wallet Analytics', icon: PieChart },
               { id: 'dao', label: 'DAO Voting', icon: Users },
               { id: 'reports', label: 'Threat Reports', icon: FileText },
-              { id: 'api-testing', label: 'API Testing', icon: Bug },
               { id: 'settings', label: 'Settings', icon: Settings },
             ].map((item) => (
               <button
@@ -222,8 +233,8 @@ const Index = () => {
                   <CardContent>
                     <div className="text-2xl font-bold text-white capitalize">{threatLevel}</div>
                     <Badge className={`mt-2 ${getThreatColor(threatLevel)}`}>
-                      {threatLevel === 'safe' ? 'All Systems Secure' :
-                       threatLevel === 'warning' ? 'Suspicious Activity' :
+                      {threatLevel === 'safe' ? 'All Systems Secure' : 
+                       threatLevel === 'warning' ? 'Suspicious Activity' : 
                        'Threat Detected'}
                     </Badge>
                   </CardContent>
@@ -254,7 +265,26 @@ const Index = () => {
                     </p>
                   </CardContent>
                 </Card>
-              </div>
+              </div>              {/* Send Transaction Section */}
+              <Card className="bg-black/20 backdrop-blur-lg border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-white">Send Tokens</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">                    <Button 
+                      asChild
+                      className="bg-green-600 hover:bg-green-700 text-white w-full"
+                    >
+                      <Link to="/send">💸 Send Tokens Securely</Link>
+                    </Button>
+                    <p className="text-sm text-gray-400">
+                      Send tokens to any address with ML-powered fraud detection.
+                      Our AI will analyze the transaction and warn you about potential risks.
+                      <span className="text-cyan-400 font-medium"> Protected by external ML fraud detection!</span>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Enhanced Demo Section */}
               <Card className="bg-black/20 backdrop-blur-lg border-white/10">
@@ -263,7 +293,7 @@ const Index = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <Button
+                    <Button 
                       onClick={simulateScamTransaction}
                       disabled={showInterceptor || isProcessing}
                       className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
@@ -271,7 +301,7 @@ const Index = () => {
                       {isProcessing ? 'Processing...' : showInterceptor ? 'Threat Active...' : '🚨 Simulate Scam Transaction'}
                     </Button>
                     <p className="text-sm text-gray-400">
-                      Test the AI threat detection system with a simulated malicious transaction.
+                      Test the AI threat detection system with a simulated malicious transaction. 
                       Our AI will analyze the transaction and warn you about potential risks.
                       <span className="text-cyan-400 font-medium"> Earn +3 Shield Points when you block threats!</span>
                     </p>
@@ -287,47 +317,8 @@ const Index = () => {
             </div>
           )}
 
-          {activeTab === 'send' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Wallet Info - Left Column */}
-                <div className="lg:col-span-1">
-                  <WalletInfo
-                    showNetworkInfo={true}
-                    autoRefresh={true}
-                    className="h-fit"
-                  />
-                </div>
-
-                {/* Transaction Form - Right Columns */}
-                <div className="lg:col-span-2">
-                  <TransactionForm
-                    onTransactionComplete={(txHash) => {
-                      toast({
-                        title: "🎉 Transaction Complete!",
-                        description: `Transaction ${txHash.slice(0, 10)}... has been confirmed.`,
-                        variant: "default"
-                      });
-                      // Optionally refresh wallet info or add to transaction history
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Recent Transactions */}
-              <Card className="bg-black/20 backdrop-blur-lg border-white/10">
-                <CardHeader>
-                  <CardTitle className="text-white">Recent Transactions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <TransactionHistory />
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
           {activeTab === 'analytics' && <WalletAnalytics walletAddress={currentAddress} />}
-
+          
           {activeTab === 'dao' && (
             <div className="space-y-6">
               {/* Enhanced DAO Panel */}
@@ -335,7 +326,7 @@ const Index = () => {
                 <CardHeader>
                   <CardTitle className="text-white">Community DAO Voting</CardTitle>
                   <p className="text-gray-400">
-                    Vote on community threat reports and earn Shield Points!
+                    Vote on community threat reports and earn Shield Points! 
                     <span className="text-cyan-400">+2 points per vote</span>
                   </p>
                 </CardHeader>
@@ -351,16 +342,16 @@ const Index = () => {
                         <Badge className="bg-red-500/20 text-red-400">High Risk</Badge>
                       </div>
                       <div className="flex space-x-2">
-                        <Button
-                          size="sm"
+                        <Button 
+                          size="sm" 
                           className="bg-green-600 hover:bg-green-700"
                           onClick={() => handleDAOVote(1, 'approve')}
                         >
                           Approve Block
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
                           className="border-red-500/30 text-red-400 hover:bg-red-500/10"
                           onClick={() => handleDAOVote(1, 'reject')}
                         >
@@ -407,7 +398,7 @@ const Index = () => {
                     {/* Enhanced submit button */}
                     <div className="p-4 bg-white/5 rounded-lg border border-white/10">
                       <h4 className="text-white font-medium mb-2">Submit New Report</h4>
-                      <Button
+                      <Button 
                         className="w-full bg-cyan-600 hover:bg-cyan-700"
                         onClick={handleThreatReport}
                       >
@@ -418,11 +409,7 @@ const Index = () => {
                 </div>
               </CardContent>
             </Card>
-          )}
-
-          {activeTab === 'api-testing' && <ApiErrorExample />}
-
-          {activeTab === 'settings' && (
+          )}          {activeTab === 'settings' && (
             <div className="space-y-6">
               <Card className="bg-black/20 backdrop-blur-lg border-white/10">
                 <CardHeader>
@@ -454,7 +441,7 @@ const Index = () => {
                   </div>
                 </CardContent>
               </Card>
-
+              
               {/* Telegram Settings Integration */}
               <TelegramSettings walletAddress={currentAddress} />
             </div>
@@ -464,14 +451,18 @@ const Index = () => {
 
       {/* Enhanced Modals and Notifications */}
       {showInterceptor && (
-        <TransactionInterceptor
+        <TransactionInterceptor 
           onClose={handleCloseInterceptor}
           onBlock={handleBlockTransaction}
+          fromAddress={transactionDetails.fromAddress}
+          toAddress={transactionDetails.toAddress}
+          value={transactionDetails.value}
+          gasPrice={transactionDetails.gasPrice}
         />
       )}
 
       {/* AI Learning Feedback */}
-      <AILearningFeedback
+      <AILearningFeedback 
         trigger={showAIFeedback}
         actionType={lastAction}
         onComplete={() => setShowAIFeedback(false)}

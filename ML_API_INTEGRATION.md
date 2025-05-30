@@ -49,7 +49,10 @@ The external ML API is integrated in several places:
 
 1. **Backend Service (Go)**: `backend/services/ai.go` handles the ML integration for backend processing
 2. **API Endpoint (Python)**: `api/predict.py` provides a serverless API route that uses the external ML API
-3. **Frontend Component**: `src/components/TransactionInterceptor.tsx` displays warning messages based on ML predictions
+3. **Transaction Components**: 
+   - `src/components/SendTransaction.tsx` - Handles transaction creation with ML fraud detection
+   - `src/pages/SendPage.tsx` - Complete transaction page with wallet connection
+   - `src/components/TransactionInterceptor.tsx` - Displays fraud warning messages
 
 ## Testing
 

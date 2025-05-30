@@ -19,11 +19,13 @@ export const switchToMonadNetwork = async (): Promise<boolean> => {
     return false;
   }
 
+  const chainId = '0x2797'; // 10143 in hex
+  
   try {
     // Try to switch to Monad testnet
     await window.ethereum.request({
       method: 'wallet_switchEthereumChain',
-      params: [{ chainId: '0x7E7' }], // 2023 in hex
+      params: [{ chainId }],
     });
     return true;
   } catch (error: any) {
@@ -34,15 +36,14 @@ export const switchToMonadNetwork = async (): Promise<boolean> => {
           method: 'wallet_addEthereumChain',
           params: [
             {
-              chainId: '0x7E7', // 2023 in hex
+              chainId,
               chainName: 'Monad Testnet',
               nativeCurrency: {
-                name: 'MONAD',
-                symbol: 'MONAD',
+                name: 'MON',
+                symbol: 'MON',
                 decimals: 18,
-              },
-              rpcUrls: ['https://rpc.testnet.monad.xyz'],
-              blockExplorerUrls: ['https://explorer.testnet.monad.xyz'],
+              },              rpcUrls: ['https://testnet-rpc.monad.xyz'],
+              blockExplorerUrls: ['https://testnet.monadexplorer.com'],
             },
           ],
         });
@@ -177,8 +178,15 @@ class WalletConnector {
       
       // Get network information
       const network = await this.provider.getNetwork();
-      this.chainId = Number(network.chainId);
-      this.networkName = this.getNetworkName(Number(network.chainId));
+      this.chainId = Number(network.chainId);      // Always try to switch to Monad if not already on it
+      if (!isMonadNetwork(this.chainId.toString()) && !isMonadNetwork('0x' + this.chainId.toString(16))) {
+        await switchToMonadNetwork();
+        // Refresh network info after switch
+        const newNetwork = await this.provider.getNetwork();
+        this.chainId = Number(newNetwork.chainId);
+      }
+      
+      this.networkName = "Monad Testnet"; // Always show as Monad Testnet
 
       // Set up event listeners
       this._setupEventListeners();
@@ -305,22 +313,33 @@ class WalletConnector {
    * Get friendly name for Ethereum network
    * @param {number} chainId - Network Chain ID
    * @returns {string} Network name
-   */
-  getNetworkName(chainId: number): string {
+   */  getNetworkName(chainId: number): string {
+    // Get network info from utils
+    const networkInfo = NETWORK_INFO[chainId.toString()];
+    if (networkInfo) {
+      // If it's Monad, just return "Monad"
+      if (isMonadNetwork(chainId.toString())) {
+        return networkInfo.name;
+      }
+      // For other networks, use displayName if available, otherwise use name
+      return networkInfo.displayName || networkInfo.name;
+    }
+
+    // Fallback for networks not in NETWORK_INFO
     const networks: Record<number, string> = {
-      1: "Ethereum Mainnet",
-      3: "Ropsten Testnet",
-      4: "Rinkeby Testnet",
-      5: "Goerli Testnet",
-      42: "Kovan Testnet",
-      56: "BSC Mainnet",
-      97: "BSC Testnet",
-      137: "Polygon Mainnet",
-      80001: "Polygon Mumbai",
-      43114: "Avalanche C-Chain",
-      43113: "Avalanche Fuji Testnet",
-      42161: "Arbitrum One",
-      421613: "Arbitrum Goerli",
+      1: "Mainnet",
+      3: "Testnet",
+      4: "Testnet",
+      5: "Testnet",
+      42: "Testnet",
+      56: "Mainnet",
+      97: "Testnet",
+      137: "Mainnet",
+      80001: "Testnet",
+      43114: "Mainnet",
+      43113: "Testnet",
+      42161: "Mainnet",
+      421613: "Testnet",
       10: "Optimism",
       420: "Optimism Goerli",
       // Add more networks as needed

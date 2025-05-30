@@ -274,9 +274,17 @@ const WalletApp: React.FC<WalletAppProps> = ({ onAddressChanged }) => {
       setTimeout(() => setTxHash(null), 5000);
 
       await updateBalance();
-    } catch (err: any) {
-      console.error("Transaction error:", err);
-      setError(err.message);
+    } catch (err: any) {      console.error("Transaction error:", err);
+      if (err.code === 4001 || err.message?.includes('user rejected')) {
+        setError('Transaction cancelled');
+        toast({
+          title: "Transaction Cancelled",
+          description: "The transaction was cancelled",
+          variant: "default"
+        });
+      } else {
+        setError(err.message);
+      }
     } finally {
       setIsSending(false);
     }

@@ -8,7 +8,8 @@ from urllib.parse import parse_qs
 
 # Environment variables would be set in Vercel
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres12345@localhost:5432/wallet")
-ML_MODEL_URL = os.environ.get("ML_MODEL_URL", "http://localhost:5000/predict")
+# Always use the external ML API
+ML_MODEL_URL = "https://fraud-transaction-detection-uaxt.onrender.com/predict"
 
 def connect_to_db():
     """Connect to PostgreSQL database"""

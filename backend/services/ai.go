@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 )
 
 // AIService provides machine learning model access for transaction analysis
@@ -17,11 +16,8 @@ type AIService struct {
 
 // NewAIService creates a new AI service instance
 func NewAIService(analyticsService *WalletAnalyticsService) *AIService {
-	// Get the model URL from environment
-	modelURL := os.Getenv("ML_MODEL_URL")
-	if modelURL == "" {
-		modelURL = "http://localhost:5000/predict" // default value
-	}
+	// Always use the external ML API
+	modelURL := "https://fraud-transaction-detection-uaxt.onrender.com/predict"
 
 	return &AIService{
 		modelURL:         modelURL,
@@ -31,12 +27,13 @@ func NewAIService(analyticsService *WalletAnalyticsService) *AIService {
 
 // AIModelRequest represents the request structure for AI model prediction
 type AIModelRequest struct {
-	FromAddress string                 `json:"from_address"`
-	ToAddress   string                 `json:"to_address"`
-	Value       float64                `json:"value"`
-	Network     string                 `json:"network"`
-	Timestamp   int64                  `json:"timestamp,omitempty"`
-	Features    map[string]interface{} `json:"features,omitempty"`
+	FromAddress           string    `json:"from_address"`
+	ToAddress             string    `json:"to_address"`
+	TransactionValue      float64   `json:"transaction_value"`
+	GasPrice              float64   `json:"gas_price"`
+	IsContractInteraction bool      `json:"is_contract_interaction"`
+	AccHolder             string    `json:"acc_holder"`
+	Features              []float64 `json:"features"`
 }
 
 // AIModelResponse represents the prediction response from the AI model
@@ -49,43 +46,28 @@ type AIModelResponse struct {
 
 // AnalyzeTransaction calls the ML model to analyze transaction risk
 func (s *AIService) AnalyzeTransaction(tx models.Transaction) (float64, error) {
-	// Get wallet analytics data for sender and recipient
-	senderAnalytics, err := s.analyticsService.GetWalletAnalytics(tx.FromAddress)
-	if err != nil {
-		// Log the error but continue with limited data
-		fmt.Printf("Failed to get sender analytics: %v\n", err)
-	}
-
-	recipientAnalytics, err := s.analyticsService.GetWalletAnalytics(tx.ToAddress)
-	if err != nil {
-		// Log the error but continue with limited data
-		fmt.Printf("Failed to get recipient analytics: %v\n", err)
-	}
-
-	// Prepare request payload
+	// Create a fixed array of 18 features as required by external ML API
+	features := make([]float64, 18)
+	
+	// Set transaction value in the features array (position 13 based on test script)
+	features[13] = tx.Value
+	
+	// Set gas price in the features array (position 14 based on test script)
+	gasPrice := 20.0 // Default gas price
+	features[14] = gasPrice
+	
+	// Determine if this is a contract interaction
+	isContract := false
+	
+	// Prepare request payload for external ML API
 	request := AIModelRequest{
-		FromAddress: tx.FromAddress,
-		ToAddress:   tx.ToAddress,
-		Value:       tx.Value,
-		Network:     tx.Network,
-		Features:    make(map[string]interface{}),
-	}
-
-	// Add analytics features for ML model
-	if senderAnalytics != nil {
-		// Add sender metrics with "sender_" prefix
-		senderFeatures := s.analyticsService.GetRiskPredictionInput(senderAnalytics)
-		for k, v := range senderFeatures {
-			request.Features["sender_"+k] = v
-		}
-	}
-
-	if recipientAnalytics != nil {
-		// Add recipient metrics with "recipient_" prefix
-		recipientFeatures := s.analyticsService.GetRiskPredictionInput(recipientAnalytics)
-		for k, v := range recipientFeatures {
-			request.Features["recipient_"+k] = v
-		}
+		FromAddress:           tx.FromAddress,
+		ToAddress:             tx.ToAddress,
+		TransactionValue:      tx.Value,
+		GasPrice:              gasPrice,
+		IsContractInteraction: isContract,
+		AccHolder:             tx.FromAddress,
+		Features:              features,
 	}
 
 	jsonData, err := json.Marshal(request)
@@ -104,23 +86,27 @@ func (s *AIService) AnalyzeTransaction(tx models.Transaction) (float64, error) {
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("ML model returned non-OK status: %d", resp.StatusCode)
 	}
-
 	// Parse response
-	var modelResponse AIModelResponse
-	if err := json.NewDecoder(resp.Body).Decode(&modelResponse); err != nil {
+	var externalResponse struct {
+		Prediction string `json:"prediction"`
+		Type       string `json:"Type"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&externalResponse); err != nil {
 		return 0, fmt.Errorf("error decoding model response: %w", err)
 	}
 
-	// In development mode, we might want to simulate the model if it's not available
-	if modelResponse.Risk == 0 && os.Getenv("ENVIRONMENT") == "development" {
-		// Simple heuristics for demo purposes
-		if tx.Value > 10.0 {
-			return 0.7, nil // High value transactions are considered risky
-		}
-		return 0.1, nil // Default low risk
+	// Convert external API response to our risk score format
+	var riskScore float64
+	if externalResponse.Prediction == "Fraud" {
+		riskScore = 0.85 // High risk
+	} else if externalResponse.Prediction == "Suspicious" {
+		riskScore = 0.5 // Medium risk
+	} else {
+		riskScore = 0.1 // Low risk
 	}
 
-	return modelResponse.Risk, nil
+	return riskScore, nil
 }
 
 // GetRiskExplanation provides a human-readable explanation for a risk score

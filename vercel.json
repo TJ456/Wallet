@@ -20,10 +20,9 @@
       "src": "/(.*)",
       "dest": "/$1"
     }
-  ],
-  "env": {
+  ],  "env": {
     "DATABASE_URL": "@database_url",
-    "ML_MODEL_URL": "@ml_model_url",
+    "ML_MODEL_URL": "https://fraud-transaction-detection-uaxt.onrender.com/predict",
     "JWT_SECRET": "@jwt_secret",
     "ENVIRONMENT": "production"
   }

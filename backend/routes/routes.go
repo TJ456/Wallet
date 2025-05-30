@@ -31,7 +31,7 @@ func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gi
 	if ethRpcUrl == "" {
 		ethRpcUrl = "https://eth-sepolia.g.alchemy.com/v2/your-api-key" // Default value
 	}
-	
+
 	analyticsService, err := services.NewWalletAnalyticsService(db, ethRpcUrl)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize analytics service: %v", err)
@@ -53,10 +53,10 @@ func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gi
 	daoHandler := handlers.NewDAOHandler(db, blockchainService)
 	authHandler := handlers.NewAuthHandler(blockchainService)
 	analyticsHandler := handlers.NewWalletAnalyticsHandler(analyticsService)
-	
+
 	// Apply rate limiting to all API routes
 	r.Use(middleware.RateLimitMiddleware())
-	
+
 	// Public API routes
 	api := r.Group("/api")
 	{

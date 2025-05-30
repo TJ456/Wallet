@@ -9,52 +9,23 @@ class TransactionPredictor:
     def __init__(self):
         self.api_url = EXTERNAL_ML_API
     
-    def predict(self, transaction_data):
+    def predict(self, features):
         """
         Predict risk score for a transaction using external ML API
-        Formats the data for the external API and returns the prediction
+        Simply forwards the features to the external API and returns the prediction
         """
         try:
-            # Ensure the transaction data has required fields for the external ML API
-            ml_request = {
-                "from_address": transaction_data.get("from_address", ""),
-                "to_address": transaction_data.get("to_address", ""),
-                "transaction_value": float(transaction_data.get("value", 0.0)),
-                "gas_price": float(transaction_data.get("gas_price", 20.0)),
-                "is_contract_interaction": bool(transaction_data.get("is_contract", False)),
-                "acc_holder": transaction_data.get("from_address", ""),
-                "features": [0.0] * 18  # Initialize with 18 zeros as required by the ML API
-            }
-            
-            # Set transaction value and gas price in the features array (positions 13 and 14)
-            ml_request["features"][13] = ml_request["transaction_value"]
-            ml_request["features"][14] = ml_request["gas_price"]
-            
-            # Forward the formatted request to the external API
+            # Forward the features to the external API
             response = requests.post(
                 self.api_url,
                 headers={"Content-Type": "application/json"},
-                json=ml_request,
+                json=features,
                 timeout=10  # Add timeout to avoid hanging
             )
             
-            # If successful, return the API response along with risk score
+            # If successful, return the API response directly
             if response.status_code == 200:
-                api_response = response.json()
-                # Convert the external API response to our risk score format
-                risk_score = 0.1  # Default low risk
-                if api_response.get("prediction") == "Fraud":
-                    risk_score = 0.9  # High risk
-                    risk_level = "HIGH"
-                else:
-                    risk_level = "LOW"
-                
-                return {
-                    "external_prediction": api_response,
-                    "risk_score": risk_score,
-                    "risk_level": risk_level,
-                    "explanation": f"Transaction prediction: {api_response.get('prediction', 'Unknown')}, Type: {api_response.get('Type', 'Unknown')}"
-                }
+                return response.json()
             else:
                 # Return error information
                 return {

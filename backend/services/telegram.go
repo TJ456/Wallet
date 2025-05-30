@@ -160,7 +160,7 @@ func (ts *TelegramService) LinkWallet(chatID string, walletAddress string, userN
 	// Check if mapping already exists
 	var existingMapping models.TelegramMapping
 	result := ts.DB.Where("wallet_address = ?", walletAddress).First(&existingMapping)
-	
+
 	if result.Error == nil {
 		// Update existing mapping
 		existingMapping.ChatID = chatID
@@ -170,7 +170,7 @@ func (ts *TelegramService) LinkWallet(chatID string, walletAddress string, userN
 		existingMapping.IsActive = true
 		return ts.DB.Save(&existingMapping).Error
 	}
-	
+
 	// Create new mapping
 	mapping := models.TelegramMapping{
 		WalletAddress: walletAddress,
@@ -180,7 +180,7 @@ func (ts *TelegramService) LinkWallet(chatID string, walletAddress string, userN
 		LastName:      lastName,
 		IsActive:      true,
 	}
-	
+
 	return ts.DB.Create(&mapping).Error
 }
 
@@ -225,18 +225,18 @@ func (ts *TelegramService) processMessage(message *TelegramMessage) {
 
 			walletAddr := cmd[1]
 			chatID := fmt.Sprintf("%d", message.Chat.ID)
-			
+
 			// Get user details
 			userName := ""
 			firstName := ""
 			lastName := ""
-			
+
 			if message.From != nil {
 				userName = message.From.Username
 				firstName = message.From.FirstName
 				lastName = message.From.LastName
 			}
-			
+
 			if err := ts.LinkWallet(chatID, walletAddr, userName, firstName, lastName); err != nil {
 				log.Printf("Error linking wallet: %v", err)
 				ts.SendMessage(message.Chat.ID, "❌ Failed to link your wallet. Please try again later.")
@@ -263,23 +263,23 @@ func (ts *TelegramService) processMessage(message *TelegramMessage) {
 			var mappings []models.TelegramMapping
 			chatIDStr := fmt.Sprintf("%d", message.Chat.ID)
 			result := ts.DB.Where("chat_id = ? AND is_active = ?", chatIDStr, true).Find(&mappings)
-			
+
 			if result.Error != nil || result.RowsAffected == 0 {
 				ts.SendMessage(message.Chat.ID, "❌ You don't have any linked wallets. Use /link YOUR_WALLET_ADDRESS to connect your wallet.")
 				return
 			}
-			
+
 			// Generate status message
 			statusMessage := "🛡️ <b>Security Status</b>: Strong\n\n" +
 				"✅ No suspicious activities detected\n" +
 				"✅ AI scam detection active\n" +
 				"✅ Real-time monitoring enabled\n\n" +
 				"<b>Connected wallets:</b>\n"
-				
+
 			for _, mapping := range mappings {
 				statusMessage += fmt.Sprintf("• %s\n", mapping.WalletAddress)
 			}
-			
+
 			statusMessage += "\nYour wallet is currently protected by UnhackableWallet security features."
 
 			ts.SendMessage(message.Chat.ID, statusMessage)

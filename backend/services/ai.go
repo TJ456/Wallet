@@ -48,17 +48,17 @@ type AIModelResponse struct {
 func (s *AIService) AnalyzeTransaction(tx models.Transaction) (float64, error) {
 	// Create a fixed array of 18 features as required by external ML API
 	features := make([]float64, 18)
-	
+
 	// Set transaction value in the features array (position 13 based on test script)
 	features[13] = tx.Value
-	
+
 	// Set gas price in the features array (position 14 based on test script)
 	gasPrice := 20.0 // Default gas price
 	features[14] = gasPrice
-	
+
 	// Determine if this is a contract interaction
 	isContract := false
-	
+
 	// Prepare request payload for external ML API
 	request := AIModelRequest{
 		FromAddress:           tx.FromAddress,
@@ -91,7 +91,7 @@ func (s *AIService) AnalyzeTransaction(tx models.Transaction) (float64, error) {
 		Prediction string `json:"prediction"`
 		Type       string `json:"Type"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&externalResponse); err != nil {
 		return 0, fmt.Errorf("error decoding model response: %w", err)
 	}

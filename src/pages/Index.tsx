@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Shield, AlertTriangle, CheckCircle, Zap, Users, FileText, Settings, PieChart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,13 @@ const Index = () => {
   const [currentAddress, setCurrentAddress] = useState('');
   const [threatLevel, setThreatLevel] = useState<'safe' | 'warning' | 'danger'>('safe');
   const [showInterceptor, setShowInterceptor] = useState(false);
+  const [transactionDetails, setTransactionDetails] = useState({
+    fromAddress: '',
+    toAddress: '',
+    value: 0,
+    gasPrice: 0
+  });
+  const [suspiciousAddress, setSuspiciousAddress] = useState('0xa12066091c6F636505Bd64F2160EA1884142B38c');  // Add this line
   const [activeTab, setActiveTab] = useState('overview');
   const [aiScansToday, setAiScansToday] = useState(247);
   const [blockedThreats, setBlockedThreats] = useState(15);
@@ -63,15 +71,23 @@ const Index = () => {
     console.log('Simulating scam transaction...');
     setIsProcessing(true);
     
+    // Set transaction details for the interceptor
+    setTransactionDetails({
+      fromAddress: currentAddress || '0x742d35Cc6634C0532925a3b8D4C9db96c4b4d8b',
+      toAddress: '0xa12066091c6F636505Bd64F2160EA1884142B38c',
+      value: 0.00000000000001,
+      gasPrice: 20
+    });
+
     setAiScansToday(prev => prev + 1);
     setThreatLevel('danger');
     setLastAction('scan');
     setShowAIFeedback(true);
     
     toast({
-      title: "⚠️ Threat Detected!",
-      description: "Suspicious transaction intercepted by AI scanner.",
-      variant: "destructive",
+      title: "⚠️ Analyzing Transaction",
+      description: "ML model is analyzing the transaction...",
+      variant: "default",
     });
 
     setTimeout(() => {
@@ -249,7 +265,26 @@ const Index = () => {
                     </p>
                   </CardContent>
                 </Card>
-              </div>
+              </div>              {/* Send Transaction Section */}
+              <Card className="bg-black/20 backdrop-blur-lg border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-white">Send Tokens</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">                    <Button 
+                      asChild
+                      className="bg-green-600 hover:bg-green-700 text-white w-full"
+                    >
+                      <Link to="/send">💸 Send Tokens Securely</Link>
+                    </Button>
+                    <p className="text-sm text-gray-400">
+                      Send tokens to any address with ML-powered fraud detection.
+                      Our AI will analyze the transaction and warn you about potential risks.
+                      <span className="text-cyan-400 font-medium"> Protected by external ML fraud detection!</span>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Enhanced Demo Section */}
               <Card className="bg-black/20 backdrop-blur-lg border-white/10">
@@ -419,6 +454,10 @@ const Index = () => {
         <TransactionInterceptor 
           onClose={handleCloseInterceptor}
           onBlock={handleBlockTransaction}
+          fromAddress={transactionDetails.fromAddress}
+          toAddress={transactionDetails.toAddress}
+          value={transactionDetails.value}
+          gasPrice={transactionDetails.gasPrice}
         />
       )}
 

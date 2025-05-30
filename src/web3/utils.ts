@@ -6,9 +6,9 @@ import { ethers, formatUnits, parseUnits } from 'ethers';
 /**
  * Network information by chain ID
  */
-export const NETWORK_INFO = {
-  '1': {
+export const NETWORK_INFO = {  '1': {
     name: 'Ethereum Mainnet',
+    displayName: 'Mainnet',
     currency: 'ETH',
     explorer: 'https://etherscan.io',
     blockTime: 15, // seconds
@@ -16,7 +16,8 @@ export const NETWORK_INFO = {
     logoUrl: '/ethereum.svg'
   },
   '5': {
-    name: 'Goerli Testnet',
+    name: 'Goerli',
+    displayName: 'Testnet',
     currency: 'ETH',
     explorer: 'https://goerli.etherscan.io',
     blockTime: 15,
@@ -24,32 +25,46 @@ export const NETWORK_INFO = {
     logoUrl: '/ethereum.svg'
   },
   '11155111': {
-    name: 'Sepolia Testnet',
+    name: 'Sepolia',
+    displayName: 'Testnet',
     currency: 'ETH',
     explorer: 'https://sepolia.etherscan.io',
     blockTime: 15,
     isTestnet: true,
     logoUrl: '/ethereum.svg'
-  },
-  '2023': {
-    name: 'Monad Testnet',
-    currency: 'MONAD',
-    explorer: 'https://explorer.testnet.monad.xyz',
+  },  '10143': {
+    name: 'Monad',
+    displayName: 'Testnet',
+    currency: 'MON',
+    explorer: 'https://testnet.monadexplorer.com',
     blockTime: 2, // Monad has much faster block times
     isTestnet: true,
     logoUrl: '/monad.svg',
     recommended: true,
-    rpcUrl: 'https://rpc.testnet.monad.xyz'
+    rpcUrl: 'https://testnet-rpc.monad.xyz'
   }
 };
 
 /**
  * Check if the current network is Monad
- * @param {string} chainId - The current chain ID
+ * @param {string} chainId - The current chain ID (can be in decimal or hex format)
  * @returns {boolean} True if on Monad network
  */
 export function isMonadNetwork(chainId: string | null | undefined): boolean {
-  return chainId === '2023';
+  if (!chainId) return false;
+  
+  // Handle both decimal and hex formats
+  if (chainId === '10143' || chainId === '0x2797') {
+    return true;
+  }
+  
+  // Handle the case where it might be a hex string without '0x' prefix
+  try {
+    const chainIdNum = parseInt(chainId);
+    return chainIdNum === 10143;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -190,6 +205,7 @@ export function getEtherscanUrl(value: string, type: 'address' | 'tx', chainId: 
     56: 'https://bscscan.com',
     97: 'https://testnet.bscscan.com',
     42161: 'https://arbiscan.io',
+    10143: 'https://testnet.monadexplorer.com',
     // Add more networks as needed
   };
   
@@ -238,6 +254,7 @@ export function getExplorerUrl(chainId: number): string {
     56: 'https://bscscan.com',
     97: 'https://testnet.bscscan.com',
     42161: 'https://arbiscan.io',
+    10143: 'https://testnet.monadexplorer.com',
     // Add more networks as needed
   };
   

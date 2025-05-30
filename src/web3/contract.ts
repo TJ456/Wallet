@@ -253,8 +253,11 @@ class ContractService {
       });
       
       return tx;
-    } catch (error: any) {
-      console.error('Secure send error:', error);
+    } catch (error: any) {      console.error('Secure send error:', error);
+      // Check if user rejected the transaction
+      if (error.code === 4001 || error.message?.includes('user rejected')) {
+        throw new Error('Transaction cancelled by user');
+      }
       throw new Error(`Failed to send transaction: ${error.message}`);
     }
   }
@@ -335,9 +338,12 @@ export const reportScam = async (scammer: string, reason: string, evidence: stri
     const tx = await contractService.reportScam(scammer, reason, evidence);
     const receipt = await tx.wait();
     return receipt.hash;
-  } catch (error: any) {
-    console.error('Report scam error:', error);
-    throw new Error(`Report submission failed: ${error.message}`);
+  } catch (error: any) {      console.error('Report scam error:', error);
+      // Check if user rejected the transaction
+      if (error.code === 4001 || error.message?.includes('user rejected')) {
+        throw new Error('Report cancelled by user');
+      }
+      throw new Error(`Report submission failed: ${error.message}`);
   }
 };
 

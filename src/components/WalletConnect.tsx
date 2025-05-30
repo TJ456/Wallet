@@ -94,8 +94,9 @@ const WalletConnect: React.FC<WalletConnectProps> = ({ onConnect, isConnected, a
           <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
           Connected
         </Badge>
-        {networkName && (
-          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+        {networkName && (        <Badge className={`${networkName?.toLowerCase().includes('mainnet') 
+            ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+            : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}`}>
             {networkName}
           </Badge>
         )}

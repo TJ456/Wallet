@@ -38,7 +38,7 @@ cp .env.example .env
 2. Edit the `.env` file to include your private key and optionally customize the Monad RPC URL:
 
 ```
-MONAD_RPC_URL=https://rpc.testnet.monad.xyz
+MONAD_RPC_URL=https://testnet-rpc.monad.xyz
 PRIVATE_KEY=your_private_key_here
 ```
 

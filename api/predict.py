@@ -15,28 +15,48 @@ class TransactionPredictor:
         Formats the data for the external API and returns the prediction
         """
         try:
-            # Ensure the transaction data has required fields for the external ML API
-            ml_request = {
-                "from_address": transaction_data.get("from_address", ""),
-                "to_address": transaction_data.get("to_address", ""),
-                "transaction_value": float(transaction_data.get("value", 0.0)),
-                "gas_price": float(transaction_data.get("gas_price", 20.0)),
-                "is_contract_interaction": bool(transaction_data.get("is_contract", False)),
-                "acc_holder": transaction_data.get("from_address", ""),
-                "features": [0.0] * 18  # Initialize with 18 zeros as required by the ML API
-            }
+            # Check if request already has the correct format for the external ML API
+            if all(k in transaction_data for k in ["from_address", "to_address", "transaction_value", "features"]):
+                ml_request = transaction_data
+            else:
+                # Convert from old format to new format
+                ml_request = {
+                    "from_address": transaction_data.get("from_address", ""),
+                    "to_address": transaction_data.get("to_address", ""),
+                    "transaction_value": float(transaction_data.get("transaction_value", transaction_data.get("value", 0.0))),
+                    "gas_price": float(transaction_data.get("gas_price", 20.0)),
+                    "is_contract_interaction": bool(transaction_data.get("is_contract_interaction", transaction_data.get("is_contract", False))),
+                    "acc_holder": transaction_data.get("acc_holder", transaction_data.get("from_address", "")),
+                    "features": transaction_data.get("features", [0.0] * 18)  # Use provided features or initialize with 18 zeros
+                }
             
-            # Set transaction value and gas price in the features array (positions 13 and 14)
-            ml_request["features"][13] = ml_request["transaction_value"]
-            ml_request["features"][14] = ml_request["gas_price"]
-            
-            # Forward the formatted request to the external API
-            response = requests.post(
-                self.api_url,
-                headers={"Content-Type": "application/json"},
-                json=ml_request,
-                timeout=10  # Add timeout to avoid hanging
-            )
+            # Ensure features is correct length
+            if len(ml_request["features"]) != 18:
+                ml_request["features"] = [0.0] * 18
+                
+            # Make sure transaction value and gas price are in the features array
+            ml_request["features"][13] = float(ml_request.get("transaction_value", 0.0))
+            ml_request["features"][14] = float(ml_request.get("gas_price", 20.0))
+              # Forward the formatted request to the external API
+            # Use a longer timeout for the external API (30 seconds)
+            # This is because the free tier of Render can be slow to start up
+            try:
+                response = requests.post(
+                    self.api_url,
+                    headers={"Content-Type": "application/json"},
+                    json=ml_request,
+                    timeout=30  # Extended timeout for slow Render free tier startup
+                )
+            except requests.exceptions.Timeout:
+                # Fallback in case of timeout - log the timeout and return a default response
+                print(f"Warning: ML API request timed out after 30 seconds")
+                return {
+                    "prediction": "Unknown",
+                    "risk_score": 0.3,  # Medium-low risk for timeout cases
+                    "risk_level": "MEDIUM-LOW",
+                    "explanation": "ML API timed out. Using fallback risk assessment.",
+                    "timeout": True
+                }
             
             # If successful, return the API response along with risk score
             if response.status_code == 200:
@@ -51,6 +71,8 @@ class TransactionPredictor:
                 
                 return {
                     "external_prediction": api_response,
+                    "prediction": api_response.get("prediction", "Unknown"),
+                    "type": api_response.get("Type", "Unknown"),
                     "risk_score": risk_score,
                     "risk_level": risk_level,
                     "explanation": f"Transaction prediction: {api_response.get('prediction', 'Unknown')}, Type: {api_response.get('Type', 'Unknown')}"

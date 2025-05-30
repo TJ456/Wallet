@@ -4,8 +4,8 @@ We have successfully set up the UnhackableWallet smart contract for deployment o
 
 ## 1. Hardhat Configuration
 
-- Added Monad testnet to `hardhat.config.ts` with chain ID 2023
-- Configured custom RPC URL: `https://rpc.testnet.monad.xyz`
+- Added Monad testnet to `hardhat.config.ts` with chain ID 10143
+- Configured custom RPC URL: `https://testnet-rpc.monad.xyz`
 - Set up Monad Explorer API for contract verification
 
 ## 2. Deployment Scripts

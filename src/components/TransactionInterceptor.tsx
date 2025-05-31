@@ -22,23 +22,39 @@ interface MLResponse {
 
 const isContractAddress = async (address: string): Promise<boolean> => {
   try {
+    if (!window.ethereum) {
+      console.warn("No ethereum provider available");
+      return false;
+    }
     const provider = new ethers.BrowserProvider(window.ethereum);
     const code = await provider.getCode(address);
     // If address has code, it's a contract
     return code !== '0x';
-  } catch {
+  } catch (error) {
     // If there's an error, assume it's not a contract
+    console.warn("Error checking contract address:", error);
     return false;
   }
 };
 
-const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({ 
-  onClose, 
-  onBlock, 
+// Function to retrieve transaction logs from localStorage
+const getTransactionLogs = () => {
+  try {
+    const logs = localStorage.getItem('transaction-logs');
+    return logs ? JSON.parse(logs) : [];
+  } catch (error) {
+    console.error('Error retrieving transaction logs:', error);
+    return [];
+  }
+};
+
+const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
+  onClose,
+  onBlock,
   toAddress,
   fromAddress,
   value,
-  gasPrice 
+  gasPrice
 }) => {
   const [whitelistedAddresses, setWhitelistedAddresses] = useState<string[]>(() => {
     const saved = localStorage.getItem('whitelisted-addresses');
@@ -57,15 +73,27 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
     localStorage.setItem('whitelisted-addresses', JSON.stringify(newWhitelist));
     onClose();
   };
+
   useEffect(() => {
     const checkTransaction = async () => {
       try {
+        console.log("Starting ML risk assessment for transaction:", {
+          fromAddress,
+          toAddress,
+          value,
+          gasPrice
+        });
+
+        // Check if address is a contract - do this first to avoid delays later
+        const isContract = await isContractAddress(toAddress);
+        console.log("Contract address check result:", isContract);
+
         // Prepare features array with real transaction data
         const features = [
           gasPrice,             // gas_price
           value,               // transaction_value
           isAddressWhitelisted ? 1 : 0, // trusted address
-          await isContractAddress(toAddress) ? 1 : 0, // is_contract
+          isContract ? 1 : 0, // is_contract
           0,                   // remaining features, could be enhanced with historical data
           0,
           0,
@@ -87,48 +115,95 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
           to_address: toAddress,
           transaction_value: value,
           gas_price: gasPrice,
-          is_contract_interaction: await isContractAddress(toAddress),
+          is_contract_interaction: isContract, // Use the value we already computed
           acc_holder: fromAddress,
           features
-        };        const response = await fetch('https://fraud-transaction-detection-uaxt.onrender.com/predict', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(transactionData)
-        });
+        };
 
-        // Handle different error cases specifically
-        if (!response.ok) {
-          const errorText = await response.text();
-          if (response.status === 503 || response.status === 504) {
-            throw new Error('ML service is temporarily unavailable. Please try again in a few moments.');
-          } else if (response.status === 400) {
-            throw new Error('Invalid transaction data: ' + errorText);
-          } else {
-            throw new Error('ML service error: ' + errorText);
-          }
-        }
+        console.log("Sending transaction data to ML service:", transactionData);
 
-        let data;
         try {
-          data = await response.json();
-        } catch (e) {
-          throw new Error('Invalid response from ML service');
-        }
+          console.log("Starting ML risk assessment using external API only");
 
-        if (!data || data.risk_score === undefined) {
-          throw new Error('Invalid response format from ML service');
-        }
+          // Use ONLY the external ML API endpoint
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            controller.abort();
+            console.warn("ML API request timed out after 15 seconds");
+          }, 15000); // 15 second timeout
 
-        setMlResponse(data);      } catch (err) {
+          const response = await fetch('https://fraud-transaction-detection-uaxt.onrender.com/predict', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(transactionData),
+            signal: controller.signal
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error("ML API error:", response.status, errorText);
+            throw new Error(`ML API returned status ${response.status}: ${errorText}`);
+          }
+
+          const data = await response.json();
+          console.log("ML API response received:", data);
+
+          if (!data || !data.prediction) {
+            console.error("ML response missing required fields:", data);
+            throw new Error('Invalid response format from ML service - missing prediction data');
+          }
+
+          // Convert the API response to our expected format
+          const normalizedData = {
+            prediction: data.prediction,
+            risk_score: data.prediction === "Fraud" ? 0.8 : 0.2, // Convert string to numeric score
+            risk_level: data.prediction === "Fraud" ? "HIGH" : "LOW",
+            type: data.Type,
+            explanation: `ML Assessment: ${data.Type}`,
+            features: features // Include the features array we prepared earlier
+          };
+
+          // Success - valid response received
+          console.log("Valid ML risk assessment received:", normalizedData);
+          setMlResponse(normalizedData);
+
+        } catch (err: any) {
+          console.error('Error in ML service communication:', err);
+
+          if (err.name === 'AbortError') {
+            throw new Error('ML risk assessment timed out');
+          }
+
+          throw err; // Re-throw to be caught by outer catch
+        }
+      } catch (err) {
         console.error('Transaction check error:', err);
+
+        // Provide more informative error message
         if (err instanceof Error) {
-          setError(err.message);
+          if (err.message.includes('timed out')) {
+            setError('ML risk assessment timed out. You may proceed with caution or try again.');
+          } else if (err.message.includes('fetch')) {
+            setError('Could not connect to ML service. Network issue or service unavailable.');
+          } else {
+            setError(err.message);
+          }
         } else {
           setError('An unexpected error occurred while checking the transaction');
         }
+
+        // Still set ML response to a default "cautious" value so UI can render
+        setMlResponse({
+          prediction: 0.5, // neutral prediction
+          risk_score: 0.5, // medium risk
+          features: new Array(18).fill(0) // Default features
+        });
       } finally {
+        // Always finish loading state to avoid UI getting stuck
         setIsLoading(false);
       }
     };
@@ -176,6 +251,44 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
     };
     loadWhitelist();
   }, []);
+  // Functions for logging transaction attempts
+  const logTransactionAttempt = (transaction, risk) => {
+    try {
+      // Get existing logs from localStorage
+      const existingLogs = localStorage.getItem('transaction-logs');
+      const logs = existingLogs ? JSON.parse(existingLogs) : [];
+
+      // Create log entry
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        from: transaction.fromAddress,
+        to: transaction.toAddress,
+        value: transaction.value,
+        gasPrice: transaction.gasPrice,
+        riskScore: risk.score,
+        riskLevel: risk.level,
+        blocked: risk.blocked,
+        whitelisted: risk.whitelisted
+      };
+
+      // Add to beginning of logs array (most recent first)
+      logs.unshift(logEntry);
+
+      // Keep only the most recent 100 logs
+      const trimmedLogs = logs.slice(0, 100);
+
+      // Save back to localStorage
+      localStorage.setItem('transaction-logs', JSON.stringify(trimmedLogs));
+
+      // Dispatch an event that a transaction was logged
+      window.dispatchEvent(new CustomEvent('transaction-logged', { detail: logEntry }));
+
+      // Log for debugging
+      console.log('Transaction logged:', logEntry);
+    } catch (error) {
+      console.error('Error logging transaction:', error);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -206,9 +319,9 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
 
   const riskScore = mlResponse ? mlResponse.risk_score * 100 : 0;
   const riskLevel = riskScore > 75 ? 'High' : riskScore > 50 ? 'Medium' : 'Low';
-  
+
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
@@ -222,7 +335,7 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
               </div>
               <span>🚨 RISK ASSESSMENT</span>
             </CardTitle>
-            <button 
+            <button
               onClick={onClose}
               className="text-gray-400 hover:text-white transition-colors p-1 rounded"
             >
@@ -233,7 +346,7 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
             Transaction analysis completed. Review the details below.
           </p>
         </CardHeader>
-        
+
         <CardContent className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
           {isAddressWhitelisted && (
             <div className="flex items-center p-4 rounded-lg bg-green-500/10 border border-green-500/30 mb-4">
@@ -254,9 +367,13 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
                 <div className="text-sm text-gray-400">Transaction Risk Level</div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold text-red-500">{riskScore.toFixed(1)}%</div>
-              <Badge className={`bg-${riskLevel === 'High' ? 'red' : riskLevel === 'Medium' ? 'yellow' : 'green'}-500/20 text-${riskLevel === 'High' ? 'red' : riskLevel === 'Medium' ? 'yellow' : 'green'}-400`}>
+            <div className="text-right">              <div className="text-3xl font-bold text-red-500">{riskScore.toFixed(1)}%</div>
+              <Badge className={riskLevel === 'High'
+                ? "bg-red-500/20 text-red-400"
+                : riskLevel === 'Medium'
+                  ? "bg-yellow-500/20 text-yellow-400"
+                  : "bg-green-500/20 text-green-400"
+              }>
                 {riskLevel} RISK
               </Badge>
             </div>
@@ -268,7 +385,7 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
               <Shield className="h-5 w-5 text-cyan-400" />
               <span>Transaction Details</span>
             </h3>
-            
+
             <div className="bg-white/5 rounded-lg p-4 border border-white/10">
               <div className="grid grid-cols-1 gap-4">
                 <div>
@@ -289,31 +406,47 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-4 border-t border-white/10">
+          {/* Action Buttons */}          <div className="flex items-center justify-between pt-4 border-t border-white/10">
             {!isAddressWhitelisted && (
-              <Button 
-                variant="outline" 
-                onClick={addToWhitelist}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  logTransactionAttempt(
+                    {fromAddress, toAddress, value, gasPrice},
+                    {score: riskScore, level: riskLevel, blocked: false, whitelisted: true}
+                  );
+                  addToWhitelist();
+                }}
                 className="border-green-500/30 text-green-400 hover:bg-green-500/10"
               >
                 <Heart className="h-4 w-4 mr-2" />
                 Trust this Address
               </Button>
             )}
-            
+
             <div className="flex items-center space-x-3 ml-auto">
-              <Button 
+              <Button
                 variant="outline"
-                onClick={onClose}
+                onClick={() => {
+                  logTransactionAttempt(
+                    {fromAddress, toAddress, value, gasPrice},
+                    {score: riskScore, level: riskLevel, blocked: false, whitelisted: isAddressWhitelisted}
+                  );
+                  onClose();
+                }}
                 className="border-gray-500/30 text-gray-400 hover:bg-gray-500/10"
               >
                 Sign Anyway
               </Button>
               {!isAddressWhitelisted && riskLevel === 'High' && (
-                <Button 
-                  onClick={onBlock}
-                  className="bg-red-600 hover:bg-red-700 text-white"
+                <Button
+                  onClick={() => {
+                    logTransactionAttempt(
+                      {fromAddress, toAddress, value, gasPrice},
+                      {score: riskScore, level: riskLevel, blocked: true, whitelisted: false}
+                    );
+                    onBlock();
+                  }}                  className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   🛑 Block Transaction
                 </Button>

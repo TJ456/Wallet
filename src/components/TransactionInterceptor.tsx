@@ -12,6 +12,7 @@ interface TransactionInterceptorProps {
   fromAddress: string;
   value: number;
   gasPrice: number;
+  isSuccess?: boolean; // Optional prop to show success modal instead of warning
 }
 
 interface MLResponse {
@@ -54,7 +55,8 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
   toAddress,
   fromAddress,
   value,
-  gasPrice
+  gasPrice,
+  isSuccess = false
 }) => {
   const [whitelistedAddresses, setWhitelistedAddresses] = useState<string[]>(() => {
     const saved = localStorage.getItem('whitelisted-addresses');
@@ -325,15 +327,26 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
       className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
-      <Card className="w-full max-w-2xl bg-black/90 backdrop-blur-lg border-red-500/30 border-2 animate-scale-in">
-        <CardHeader className="border-b border-red-500/30">
+      <Card className={`w-full max-w-2xl bg-black/90 backdrop-blur-lg border-2 animate-scale-in ${
+        isSuccess ? 'border-green-500/30' : 'border-red-500/30'
+      }`}>
+        <CardHeader className={`border-b ${isSuccess ? 'border-green-500/30' : 'border-red-500/30'}`}>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-3 text-white">
               <div className="relative">
-                <AlertTriangle className="h-6 w-6 text-red-500" />
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></div>
+                {isSuccess ? (
+                  <>
+                    <Shield className="h-6 w-6 text-green-500" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-ping"></div>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="h-6 w-6 text-red-500" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></div>
+                  </>
+                )}
               </div>
-              <span>🚨 RISK ASSESSMENT</span>
+              <span>{isSuccess ? '✅ SECURITY PASSED' : '🚨 RISK ASSESSMENT'}</span>
             </CardTitle>
             <button
               onClick={onClose}
@@ -342,8 +355,11 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
               <X className="h-5 w-5" />
             </button>
           </div>
-          <p className="text-red-400 text-sm">
-            Transaction analysis completed. Review the details below.
+          <p className={`text-sm ${isSuccess ? 'text-green-400' : 'text-red-400'}`}>
+            {isSuccess
+              ? 'ML security analysis completed successfully. Transaction appears safe to proceed.'
+              : 'Transaction analysis completed. Review the details below.'
+            }
           </p>
         </CardHeader>
 
@@ -359,22 +375,32 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
           )}
 
           {/* Risk Score */}
-          <div className="flex items-center justify-between p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+          <div className={`flex items-center justify-between p-4 rounded-lg border ${
+            isSuccess ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'
+          }`}>
             <div className="flex items-center space-x-3">
-              <Brain className="h-6 w-6 text-red-500" />
+              <Brain className={`h-6 w-6 ${isSuccess ? 'text-green-500' : 'text-red-500'}`} />
               <div>
                 <div className="text-white font-semibold">ML Risk Assessment</div>
-                <div className="text-sm text-gray-400">Transaction Risk Level</div>
+                <div className="text-sm text-gray-400">
+                  {isSuccess ? 'Security Analysis Result' : 'Transaction Risk Level'}
+                </div>
               </div>
             </div>
-            <div className="text-right">              <div className="text-3xl font-bold text-red-500">{riskScore.toFixed(1)}%</div>
-              <Badge className={riskLevel === 'High'
-                ? "bg-red-500/20 text-red-400"
-                : riskLevel === 'Medium'
-                  ? "bg-yellow-500/20 text-yellow-400"
-                  : "bg-green-500/20 text-green-400"
+            <div className="text-right">
+              <div className={`text-3xl font-bold ${isSuccess ? 'text-green-500' : 'text-red-500'}`}>
+                {riskScore.toFixed(1)}%
+              </div>
+              <Badge className={
+                isSuccess
+                  ? "bg-green-500/20 text-green-400"
+                  : riskLevel === 'High'
+                    ? "bg-red-500/20 text-red-400"
+                    : riskLevel === 'Medium'
+                      ? "bg-yellow-500/20 text-yellow-400"
+                      : "bg-green-500/20 text-green-400"
               }>
-                {riskLevel} RISK
+                {isSuccess ? 'SAFE' : `${riskLevel} RISK`}
               </Badge>
             </div>
           </div>
@@ -434,11 +460,15 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
                   );
                   onClose();
                 }}
-                className="border-gray-500/30 text-gray-400 hover:bg-gray-500/10"
+                className={`${
+                  isSuccess
+                    ? 'border-green-500/30 text-green-400 hover:bg-green-500/10'
+                    : 'border-gray-500/30 text-gray-400 hover:bg-gray-500/10'
+                }`}
               >
-                Sign Anyway
+                {isSuccess ? '✅ Proceed to MetaMask' : 'Sign Anyway'}
               </Button>
-              {!isAddressWhitelisted && riskLevel === 'High' && (
+              {!isSuccess && !isAddressWhitelisted && riskLevel === 'High' && (
                 <Button
                   onClick={() => {
                     logTransactionAttempt(
@@ -446,9 +476,25 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
                       {score: riskScore, level: riskLevel, blocked: true, whitelisted: false}
                     );
                     onBlock();
-                  }}                  className="bg-red-600 hover:bg-red-700 text-white"
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   🛑 Block Transaction
+                </Button>
+              )}
+              {isSuccess && (
+                <Button
+                  onClick={() => {
+                    logTransactionAttempt(
+                      {fromAddress, toAddress, value, gasPrice},
+                      {score: riskScore, level: riskLevel, blocked: true, whitelisted: false}
+                    );
+                    onBlock();
+                  }}
+                  className="border-gray-500/30 text-gray-400 hover:bg-gray-500/10"
+                  variant="outline"
+                >
+                  Cancel
                 </Button>
               )}
             </div>

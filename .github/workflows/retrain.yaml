@@ -22,14 +22,13 @@ jobs:
         with:
           python-version: '3.10'
 
-      - run: |
-          cd backend/AIML/
+      - name: Install, Retrain, and Commit
+        run: |
+          cd backend/AIML
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          python retrain_model.py
 
-      - run: python retrain_model.py
-
-      - run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add model/

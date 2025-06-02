@@ -13,6 +13,9 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+model_dir = os.path.join("backend", "AIML", "model")
+os.makedirs(model_dir, exist_ok=True)
+
 session = SessionLocal()
 
 query = session.query(Transactions)
@@ -47,4 +50,4 @@ print(classification_report(y_test, y_pred))
 print(f"\nAccuracy of model : {model.score(x_test, y_test)*100:.2f} %")
 
 pack = {'model': model, 'enc1': enc1, 'enc2': enc2}
-joblib.dump(pack, os.path.join("backend","AIML","model", "models.joblib"))
+joblib.dump(pack, os.path.join(model_dir, "models.joblib"))

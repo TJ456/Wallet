@@ -29,12 +29,15 @@ RUN apk --no-cache add ca-certificates
 # Copy the binary from the builder stage
 COPY --from=builder /app/out /app/out
 
-# Copy any configuration files
+# Copy any configuration files and the start script
 COPY --from=builder /app/.env* /app/
+COPY --from=builder /app/start.sh /app/start.sh
+
+# Make the start script executable
+RUN chmod +x /app/start.sh
 
 # Expose the port your application runs on
 EXPOSE 8080
 
-# Run the binary
-# For Render, use the PORT environment variable which Render sets automatically
-CMD ["/bin/sh", "-c", "export PORT=${PORT:-8080} && /app/out"]
+# Run the binary via the start script
+CMD ["/app/start.sh"]

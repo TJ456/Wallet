@@ -17,20 +17,20 @@ import (
 // SetupRouter configures all API routes
 func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gin.Engine {
 	r := gin.Default()
-
 	// Configure CORS
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000", "https://*.onrender.com", "https://*.vercel.app"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Wallet-Address", "X-Wallet-Signature", "X-Wallet-Message"},
 		AllowCredentials: true,
 	}))
-
-	// Health check endpoint for Railway
+	// Health check endpoint for Render and monitoring
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"service": "wallet-backend",
+			"status":      "ok",
+			"service":     "wallet-backend",
+			"environment": os.Getenv("ENVIRONMENT"),
+			"version":     "1.0.0",
 		})
 	})
 

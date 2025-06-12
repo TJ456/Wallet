@@ -24,8 +24,14 @@ func LoadConfig() (*Config, error) {
 	// Load .env file if it exists
 	_ = godotenv.Load()
 
+	// Special handling for Render which uses PORT instead of SERVER_PORT
+	serverPort := os.Getenv("PORT")
+	if serverPort == "" {
+		serverPort = getEnv("SERVER_PORT", "8080")
+	}
+
 	cfg := &Config{
-		ServerPort:    getEnv("SERVER_PORT", "8080"),
+		ServerPort:    serverPort,
 		DatabaseURL:   getEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/wallet"),
 		MLModelURL:    getEnv("ML_MODEL_URL", "http://localhost:5000/predict"),
 		JWTSecret:     getEnv("JWT_SECRET", "your-secret-key"),

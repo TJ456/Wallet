@@ -5,7 +5,6 @@ services:  - type: web
     region: ohio  # Choose your preferred region
     branch: main
     dockerfilePath: ./backend/Dockerfile  # Use the normal Dockerfile
-    startCommand: ./start.sh  # Use custom start script
     numInstances: 1
     healthCheckPath: /health
     buildFilter:

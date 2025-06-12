@@ -1,42 +1,24 @@
-# Railway-specific Dockerfile - simplified for maximum compatibility
-FROM golang:1.21-alpine AS builder
+# Ultra-simple Dockerfile for Railway - no cache mounts, no multi-stage
+FROM golang:1.21-alpine
 
-# Install build tools
-RUN apk add --no-cache git build-base
+# Install essential build tools
+RUN apk add --no-cache git build-base ca-certificates tzdata
 
 WORKDIR /app
 
-# Copy go.mod and go.sum first
-COPY go.mod go.sum ./
-
-# Fix go mod versions
-RUN sed -i 's/go 1.23.0/go 1.21.0/' go.mod && \
-    sed -i 's/toolchain go1.24.2//' go.mod && \
-    go mod download
-
-# Copy source
+# Copy all files at once to avoid multiple layers
 COPY . .
 
-# Build without CGO and with explicit flags, avoiding cache mounts
-ENV CGO_ENABLED=0 
-RUN go build -ldflags="-s -w" -o out .
+# Fix go.mod file
+RUN sed -i 's/go 1.23.0/go 1.21.0/' go.mod && \
+    sed -i 's/toolchain go1.24.2//' go.mod
 
-# Final stage
-FROM alpine:latest
+# Simple build with no cache mounting or special flags
+ENV CGO_ENABLED=0
+RUN go build -o backend-app .
 
-WORKDIR /app
-
-# Install certificates
-RUN apk --no-cache add ca-certificates tzdata
-
-# Copy binary
-COPY --from=builder /app/out /app/out
-
-# Copy config files (but not .env which should come from Railway variables)
-COPY --from=builder /app/config /app/config
-
-# Expose port
+# Expose the port
 EXPOSE 8080
 
-# Run
-CMD ["/app/out"]
+# Run the binary
+CMD ["./backend-app"]

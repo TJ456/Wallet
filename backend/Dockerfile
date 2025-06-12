@@ -36,4 +36,5 @@ COPY --from=builder /app/.env* /app/
 EXPOSE 8080
 
 # Run the binary
-CMD ["/app/out"]
+# For Render, use the PORT environment variable which Render sets automatically
+CMD ["/bin/sh", "-c", "export PORT=${PORT:-8080} && /app/out"]

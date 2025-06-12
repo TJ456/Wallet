@@ -1,5 +1,8 @@
-# Use the official Go image as a builder - using a specific version for stability
-FROM golang:1.21 AS builder
+# Use the official Go image as a builder - Alpine for smaller image
+FROM golang:1.21-alpine AS builder
+
+# Install build tools
+RUN apk add --no-cache git build-base
 
 WORKDIR /app
 
@@ -12,7 +15,7 @@ RUN sed -i 's/go 1.23.0/go 1.21.0/' go.mod && \
 # Copy the entire backend directory
 COPY . .
 
-# Build the application without CGo and with explicit flags
+# Build without cache mounting (for compatibility with various build systems)
 ENV CGO_ENABLED=0
 RUN go build -ldflags="-s -w" -o out .
 

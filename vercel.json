@@ -6,21 +6,28 @@
       "use": "@vercel/python"
     },
     {
+      "src": "backend/main.go",
+      "use": "@vercel/go"
+    },
+    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": { "distDir": "dist" }
     }
-  ],
-  "routes": [
+  ],  "routes": [
     {
       "src": "/api/(.*)",
       "dest": "api/$1.py"
     },
     {
+      "src": "/backend/(.*)",
+      "dest": "backend/main.go"
+    },
+    {
       "src": "/(.*)",
       "dest": "/$1"
     }
-  ],  "env": {
+  ],"env": {
     "DATABASE_URL": "@database_url",
     "ML_MODEL_URL": "https://fraud-transaction-detection-uaxt.onrender.com/predict",
     "JWT_SECRET": "@jwt_secret",

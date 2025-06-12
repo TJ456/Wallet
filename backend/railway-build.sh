@@ -1,9 +1,14 @@
-# Railway build script
+# Railway build script with better error handling
 set -e
 
 echo "======== Railway Direct Build Script ========"
+echo "Environment information:"
+echo "Working directory: $(pwd)"
+ls -la
 echo "Go version:"
 go version
+echo "System information:"
+uname -a
 
 echo "\nFixing go.mod file..."
 sed -i 's/go 1.23.0/go 1.21.0/' go.mod

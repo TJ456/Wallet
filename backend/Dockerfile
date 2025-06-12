@@ -1,18 +1,20 @@
-# Use the official Go image as a builder
-FROM golang:1.22 AS builder
+# Use the official Go image as a builder - using a specific version for stability
+FROM golang:1.21 AS builder
 
 WORKDIR /app
 
-# Copy go.mod and go.sum first for better caching
+# Fix go.mod versions before copying
 COPY go.mod go.sum ./
-RUN go mod download
+RUN sed -i 's/go 1.23.0/go 1.21.0/' go.mod && \
+    sed -i 's/toolchain go1.24.2//' go.mod && \
+    go mod download
 
 # Copy the entire backend directory
 COPY . .
 
-# Build the application without CGo
+# Build the application without CGo and with explicit flags
 ENV CGO_ENABLED=0
-RUN go build -o out .
+RUN go build -ldflags="-s -w" -o out .
 
 # Use a smaller image for the final stage
 FROM alpine:latest

@@ -1,19 +1,23 @@
-# Ultra-simple Dockerfile for Railway - no cache mounts, no multi-stage
+# Absolute minimal Dockerfile for Railway - no snapshot dependency
 FROM golang:1.21-alpine
 
-# Install essential build tools
-RUN apk add --no-cache git build-base ca-certificates tzdata
+# Install only what's absolutely necessary
+RUN apk add --no-cache git build-base ca-certificates
 
 WORKDIR /app
 
-# Copy all files at once to avoid multiple layers
+# Copy go.mod and go.sum first to leverage Docker cache
+COPY go.mod go.sum ./
+
+# Fix go.mod file immediately
+RUN sed -i 's/go 1.23.0/go 1.21.0/' go.mod && \
+    sed -i 's/toolchain go1.24.2//' go.mod && \
+    go mod download
+
+# Now copy the rest of the code
 COPY . .
 
-# Fix go.mod file
-RUN sed -i 's/go 1.23.0/go 1.21.0/' go.mod && \
-    sed -i 's/toolchain go1.24.2//' go.mod
-
-# Simple build with no cache mounting or special flags
+# Build with explicit flags and no cache dependencies
 ENV CGO_ENABLED=0
 RUN go build -o backend-app .
 

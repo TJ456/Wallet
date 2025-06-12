@@ -26,6 +26,14 @@ func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gi
 		AllowCredentials: true,
 	}))
 
+	// Health check endpoint for Railway
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ok",
+			"service": "wallet-backend",
+		})
+	})
+
 	// Initialize services
 	ethRpcUrl := os.Getenv("ETH_RPC_URL")
 	if ethRpcUrl == "" {

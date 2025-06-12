@@ -1,7 +1,11 @@
 {
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile.railway"
+    "dockerfilePath": "Dockerfile.railway",
+    "buildCommand": null,
+    "config": {
+      "NIXPACKS_NO_CACHE": "true"
+    }
   },
   "deploy": {
     "numReplicas": 1,

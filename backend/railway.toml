@@ -1,9 +1,0 @@
-{
-  "$schema": "https://schema.up.railway.app/railway.schema.json",
-  "deploy": {
-    "startCommand": "./railway-build.sh",
-    "healthcheckPath": "/",
-    "healthcheckTimeout": 300,
-    "restartPolicyType": "ON_FAILURE"
-  }
-}

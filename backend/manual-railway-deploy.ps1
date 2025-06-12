@@ -1,34 +1,55 @@
-# PowerShell script to build and manually push Docker image to Railway
-# This approach avoids dependency on Railway's build system
+# Simple deployment script for Railway
+# Handles both direct deployment and Docker builds
 
-# Stop on error
 $ErrorActionPreference = "Stop"
 
-# Ensure Docker is running
-Write-Host "Checking Docker..." -ForegroundColor Cyan
-docker info >$null 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: Docker is not running or not installed." -ForegroundColor Red
-    exit 1
+Write-Host "Wallet Backend - Railway Deployment" -ForegroundColor Cyan
+Write-Host "=================================" -ForegroundColor Cyan
+
+# Check for Railway CLI
+$hasRailway = $null -ne (Get-Command railway -ErrorAction SilentlyContinue)
+if (-not $hasRailway) {
+    Write-Host "Railway CLI not found. Installing..." -ForegroundColor Yellow
+    npm install -g @railway/cli
 }
 
-# Build the Docker image locally
-Write-Host "Building Docker image..." -ForegroundColor Cyan
-docker build -t wallet-backend-railway -f Dockerfile.railway .
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: Docker build failed." -ForegroundColor Red
-    exit 1
-}
+# Deploy options
+Write-Host "`nDeployment Options:" -ForegroundColor White
+Write-Host "1. Deploy directly with Railway CLI" -ForegroundColor Green
+Write-Host "2. Build Docker image locally and deploy" -ForegroundColor Green
+Write-Host "3. Exit" -ForegroundColor Red
 
-# Instructions for manual push
-Write-Host "`nBuild successful!" -ForegroundColor Green
-Write-Host "`nTo push to Railway, follow these steps:" -ForegroundColor Yellow
-Write-Host "1. Log in to your Railway CLI (if not already):" -ForegroundColor White
-Write-Host "   railway login" -ForegroundColor Gray
-Write-Host "`n2. Link to your project:" -ForegroundColor White
-Write-Host "   railway link" -ForegroundColor Gray
-Write-Host "`n3. Get your project's image registry URL:" -ForegroundColor White
-Write-Host "   railway variables get RAILWAY_CONTAINER_REGISTRY_HOST" -ForegroundColor Gray
-Write-Host "`n4. Tag and push your image using:" -ForegroundColor White
-Write-Host "   docker tag wallet-backend-railway [YOUR_REGISTRY_URL]/wallet-backend" -ForegroundColor Gray
-Write-Host "   docker push [YOUR_REGISTRY_URL]/wallet-backend" -ForegroundColor Gray
+$choice = Read-Host "Select an option (1-3)"
+
+switch ($choice) {
+    "1" {
+        Write-Host "`nDeploying with Railway CLI..." -ForegroundColor Cyan
+        railway up
+    }
+    "2" {
+        # Build Docker image
+        Write-Host "`nBuilding Docker image..." -ForegroundColor Cyan
+        docker build -t wallet-backend -f Dockerfile.railway .
+        
+        # Deploy to Railway
+        Write-Host "`nPushing to Railway registry..." -ForegroundColor Cyan
+        railway login
+        railway link
+        $registryHost = railway variables get RAILWAY_SERVICE_REGISTRY
+        
+        if ($registryHost) {
+            docker tag wallet-backend $registryHost
+            docker push $registryHost
+        } else {
+            Write-Host "Could not get registry URL. Please deploy manually." -ForegroundColor Red
+        }
+    }
+    "3" {
+        Write-Host "Exiting..." -ForegroundColor Red
+        exit 0
+    }
+    default {
+        Write-Host "Invalid option. Exiting..." -ForegroundColor Red
+        exit 1
+    }
+}

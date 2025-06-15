@@ -10,7 +10,7 @@ import json
 import time
 
 # External ML API URL
-EXTERNAL_ML_API_URL = "https://fraud-transaction-detection-uaxt.onrender.com/predict"
+EXTERNAL_ML_API_URL = "https://ml-fraud-transaction-detection.onrender.com/predict"
 
 def test_ml_api():
     """Test the external ML API with a sample transaction"""

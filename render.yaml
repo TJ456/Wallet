@@ -16,7 +16,7 @@ services:  - type: web
       - key: DATABASE_URL
         sync: false  # Set this secret in Render dashboard
       - key: ML_MODEL_URL
-        value: https://fraud-transaction-detection-uaxt.onrender.com/predict
+        value: https://ml-fraud-transaction-detection.onrender.com/predict
       - key: JWT_SECRET
         sync: false  # Set this secret in Render dashboard
       - key: TELEGRAM_TOKEN

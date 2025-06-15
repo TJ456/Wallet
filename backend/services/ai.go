@@ -17,7 +17,7 @@ type AIService struct {
 // NewAIService creates a new AI service instance
 func NewAIService(analyticsService *WalletAnalyticsService) *AIService {
 	// Always use the external ML API
-	modelURL := "https://fraud-transaction-detection-uaxt.onrender.com/predict"
+	modelURL := "https://ml-fraud-transaction-detection.onrender.com/predict"
 
 	return &AIService{
 		modelURL:         modelURL,

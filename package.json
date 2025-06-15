@@ -9,9 +9,14 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-favicon": "node generate-favicon.js"
+    "generate-favicon": "node generate-favicon.js",
+    "civic:setup": "node scripts/setup-civic-auth.js"
   },
   "dependencies": {
+    "@civic/civic-pass-api": "^1.0.0",
+    "@civic/solana-gateway-react": "^0.13.0",
+    "@civic/auth-client-web3": "^1.5.0",
+    "@civic/profile": "^0.2.0",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",

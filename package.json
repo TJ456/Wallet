@@ -13,10 +13,7 @@
     "civic:setup": "node scripts/setup-civic-auth.js"
   },
   "dependencies": {
-    "@civic/civic-pass-api": "^1.0.0",
-    "@civic/solana-gateway-react": "^0.13.0",
-    "@civic/auth-client-web3": "^1.5.0",
-    "@civic/profile": "^0.2.0",
+    "@solana/web3.js": "^1.87.6",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -82,7 +79,6 @@
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
     "hardhat": "^2.24.1",
-
     "postcss": "^8.4.47",
     "sharp": "^0.34.2",
     "svg2ico": "^1.0.35",
@@ -90,5 +86,9 @@
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1"
+  },
+  "resolutions": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

@@ -15,6 +15,32 @@ interface CivicPassResult {
   gatekeeperNetwork?: string;
 }
 
+interface CivicProfile {
+  id: string;
+  name: string;
+  avatar?: string;
+  email?: string;
+  verificationLevel: string;
+  verified: boolean;
+  joinedDate: Date;
+}
+
+interface TrustScoreData {
+  score: number; // 0-100
+  level: 'High' | 'Medium' | 'Low';
+  factors: {
+    civicVerified: boolean;
+    transactionHistory: {
+      totalCount: number;
+      successRate: number;
+    };
+    doiActivity: {
+      reportsResolved: number;
+      votingAccuracy: number;
+    };
+  };
+}
+
 // Configuration for Civic Pass
 const CIVIC_PASS_CONFIG: CivicPassConfig = {
   chainId: 1, // Ethereum Mainnet (change to match your target chain)
@@ -99,81 +125,103 @@ export const createCivicWallet = async () => {
       return {
         success: true,
         wallet: response.data.wallet,
-        user: response.data.user,
+        user: response.data.user
       };
     } else {
       return {
         success: false,
-        error: 'Failed to create wallet',
+        error: 'Failed to create wallet'
       };
     }
   } catch (error) {
     console.error('Failed to create Civic wallet:', error);
     return {
       success: false,
-      error: 'Wallet creation failed',
+      error: 'An error occurred during wallet creation'
     };
   }
 };
 
 /**
- * Get Civic.me profile data
- * @param address User's wallet address
- * @returns Profile data
+ * Get Civic profile for a verified user
+ * @param address User wallet address
+ * @returns Civic profile data
  */
-export const getCivicProfile = async (address: string) => {
-  try {
-    // Implementation would depend on Civic.me API
-    // This is a placeholder for now
-    return {
-      name: 'Civic User',
-      avatar: 'https://civic.me/default-avatar.png',
+export const getCivicProfile = async (address: string): Promise<CivicProfile> => {
+  // In a real implementation, this would fetch from Civic API
+  // Mock implementation
+  const mockProfiles: Record<string, CivicProfile> = {
+    // Sample profile for addresses starting with 0x1
+    '0x1': {
+      id: 'civic-123456',
+      name: 'John Doe',
+      avatar: 'https://i.pravatar.cc/150?u=civic123456',
+      email: 'john.doe@example.com',
       verificationLevel: 'Advanced',
-      activityStats: {
-        transactionCount: 0,
-        verifiedSince: new Date().toISOString(),
-      }
-    };
-  } catch (error) {
-    console.error('Failed to fetch Civic.me profile:', error);
-    return null;
-  }
+      verified: true,
+      joinedDate: new Date('2023-01-15')
+    },
+  };
+  
+  // Get first character of address
+  const firstChar = address.substring(0, 3).toLowerCase();
+  
+  // Return corresponding profile or generic one
+  return mockProfiles[firstChar] || {
+    id: `civic-${Math.random().toString(36).substring(2, 10)}`,
+    name: 'Unnamed User',
+    verificationLevel: 'Basic',
+    verified: false,
+    joinedDate: new Date()
+  };
 };
 
 /**
  * Calculate trust score based on Civic verification and activity
- * @param address User's wallet address
- * @returns Trust score details
+ * @param address User wallet address
+ * @returns Trust score data
  */
-export const calculateTrustScore = async (address: string) => {
-  try {
-    // Get verification status
-    const verification = await verifyCivicIdentity(address);
-    
-    // Base score calculations
-    let score = 0;
-    if (verification.isVerified) {
-      score += 50;
+export const calculateTrustScore = async (address: string): Promise<TrustScoreData> => {
+  // Verify civic status first
+  const verificationResult = await verifyCivicIdentity(address);
+  const isVerified = verificationResult.isVerified;
+  
+  // Mock transaction history
+  const txHistory = {
+    totalCount: Math.floor(Math.random() * 100),
+    successRate: 0.8 + (Math.random() * 0.2) // 80% to 100%
+  };
+  
+  // Mock DOI activity
+  const doiActivity = {
+    reportsResolved: Math.floor(Math.random() * 20),
+    votingAccuracy: 0.7 + (Math.random() * 0.3) // 70% to 100%
+  };
+  
+  // Calculate base score
+  let baseScore = 0;
+  if (isVerified) baseScore += 50; // +50 for Civic verification
+  baseScore += txHistory.totalCount > 50 ? 15 : (txHistory.totalCount / 50) * 15; // Up to +15 for transaction volume
+  baseScore += txHistory.successRate * 15; // Up to +15 for transaction success rate
+  baseScore += (doiActivity.reportsResolved > 10 ? 10 : doiActivity.reportsResolved) * 1; // Up to +10 for DOI participation
+  baseScore += doiActivity.votingAccuracy * 10; // Up to +10 for voting accuracy
+  
+  // Cap at 100
+  const finalScore = Math.min(Math.round(baseScore), 100);
+  
+  // Determine level
+  let level: 'High' | 'Medium' | 'Low';
+  if (finalScore >= 70) level = 'High';
+  else if (finalScore >= 40) level = 'Medium';
+  else level = 'Low';
+  
+  return {
+    score: finalScore,
+    level,
+    factors: {
+      civicVerified: isVerified,
+      transactionHistory: txHistory,
+      doiActivity
     }
-    
-    // Additional score logic would be implemented here
-    // Based on transaction history, DOI votes, etc.
-    
-    return {
-      score,
-      factors: {
-        verificationBonus: verification.isVerified ? 50 : 0,
-        doiFlags: 0,
-        resolvedDisputes: 0,
-      },
-      level: score >= 75 ? 'High' : score >= 40 ? 'Medium' : 'Low',
-    };
-  } catch (error) {
-    console.error('Failed to calculate trust score:', error);
-    return {
-      score: 0,
-      factors: {},
-      level: 'Unknown',
-    };
-  }
+  };
 };

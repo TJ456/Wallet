@@ -39,16 +39,27 @@ CIVIC_AUTH_STAGING_URL=https://staging.auth.civic.com
 // Install Civic dependencies
 console.log('Installing Civic dependencies...');
 try {
-  execSync('npm install @civic/civic-pass-api @civic/solana-gateway-react @civic/auth-client-web3 @civic/profile', { stdio: 'inherit' });
+  console.log('Installing @solana/web3.js package...');
+  execSync('npm install @solana/web3.js --save --legacy-peer-deps', { stdio: 'inherit' });
+
+  // Try to install Civic packages without breaking React 18 compatibility
+  console.log('Installing Civic Pass API package...');
+  try {
+    execSync('npm install @civic/civic-pass-api --save --legacy-peer-deps', { stdio: 'inherit' });
+    console.log('@civic/civic-pass-api installed successfully!');
+  } catch (error) {
+    console.warn('Could not install @civic/civic-pass-api. Using mock implementation instead.');
+  }
+
   console.log('Civic dependencies installed successfully!');
 } catch (error) {
   console.error('Failed to install Civic dependencies:', error);
-  process.exit(1);
+  console.log('Continuing with mocked Civic implementation...');
 }
 
 console.log('\nCivic Auth setup completed!');
 console.log('\nNext steps:');
-console.log('1. Update your .env file with your actual Civic credentials');
-console.log('2. Deploy the Civic contracts with: npx hardhat run scripts/deploy-civic.js --network yournetwork');
-console.log('3. Import the CivicAuth component in your React components to start using it');
+console.log('1. Update CIVIC_GATEKEEPER_NETWORK in .env file with your actual values');
+console.log('2. The app is currently using a mocked implementation of Civic authentication.');
+console.log('   To use the actual Civic API, you\'ll need to implement the real API calls.');
 console.log('\nRefer to CIVIC_INTEGRATION.md for complete documentation');

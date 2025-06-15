@@ -134,7 +134,7 @@ const TransactionInterceptor: React.FC<TransactionInterceptorProps> = ({
             console.warn("ML API request timed out after 15 seconds");
           }, 15000); // 15 second timeout
 
-          const response = await fetch('https://fraud-transaction-detection-uaxt.onrender.com/predict', {
+          const response = await fetch('https://ml-fraud-transaction-detection.onrender.com/predict', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

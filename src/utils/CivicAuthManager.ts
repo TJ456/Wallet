@@ -1,110 +1,175 @@
-import { CivicGateway, ImmutableActiveGateState } from '@civic/civic-pass-api';
+import { Web3AuthCore } from '@web3auth/core';
+import { CHAIN_NAMESPACES, ADAPTER_STATUS } from '@web3auth/base';
+import { OpenloginAdapter } from '@web3auth/openlogin-adapter';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { useWallet } from '@solana/wallet-adapter-react';
+
+interface SecurityVerificationResult {
+  isValid: boolean;
+  securityLevel: number;
+  riskFactors: string[];
+}
 
 export class CivicAuthManager {
-  private gateway: CivicGateway;
-  private gatekeeperNetwork: string;
-  private userAddress: string;
-  private backendUrl: string;
+  private auth: Web3AuthCore;
+  private connection: Connection;
+  private web3AuthProvider: any = null;
+  private readonly uiConfig = {
+    theme: 'dark',
+    loginMethodsOrder: ['apple', 'google', 'twitter'],
+  };
 
-  constructor(gatekeeperNetwork: string, userAddress: string, backendUrl: string) {
-    this.gateway = new CivicGateway();
-    this.gatekeeperNetwork = gatekeeperNetwork;
-    this.userAddress = userAddress;
-    this.backendUrl = backendUrl;
+  constructor(clientId: string, chain: string = 'solana', rpcUrl: string) {
+    this.connection = new Connection(rpcUrl);
+    
+    // Initialize Web3Auth core
+    this.auth = new Web3AuthCore({
+      clientId,
+      chainConfig: {
+        chainNamespace: CHAIN_NAMESPACES.SOLANA,
+        chainId: "0x1", // Solana mainnet
+        rpcTarget: rpcUrl,
+      },
+      web3AuthNetwork: "cyan",
+    });
+
+    // Configure OpenLogin Adapter with additional security
+    const openloginAdapter = new OpenloginAdapter({
+      adapterSettings: {
+        network: "mainnet",
+        uxMode: "popup",
+        whiteLabel: {
+          appName: "Solana Wallet", // Changed name to appName
+          logoLight: "https://web3auth.io/images/w3a-L-Favicon-1.svg",
+          logoDark: "https://web3auth.io/images/w3a-D-Favicon-1.svg",
+          defaultLanguage: "en",
+          mode: "dark", // Changed dark to mode
+        },
+        loginConfig: {
+          jwt: {
+            verifier: 'civic-jwt-verifier',
+            typeOfLogin: 'jwt',
+            clientId,
+          },
+        },
+      },
+    });
+
+    this.auth.configureAdapter(openloginAdapter as any);
   }
 
-  async initiateCivicAuth(deviceInfo: any): Promise<{gatepass: string, status: string}> {
+  async initiateCivicAuth(): Promise<void> {
     try {
-      // Request gatepass from backend
-      const response = await fetch(`${this.backendUrl}/api/auth/civic/initiate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userAddress: this.userAddress,
-          deviceInfo: JSON.stringify(deviceInfo),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to initiate Civic authentication');
+      // Initialize Web3Auth
+      await this.auth.init();
+      
+      // Connect with OpenLogin
+      this.web3AuthProvider = await this.auth.connectTo('openlogin');
+      
+      if (!this.web3AuthProvider) {
+        throw new Error('Authentication failed');
       }
 
-      const data = await response.json();
-      return data;
+      const userInfo = await this.auth.getUserInfo();
+      console.log('Authenticated user:', userInfo);
+
     } catch (error) {
       console.error('Civic auth initiation failed:', error);
       throw error;
     }
   }
 
-  async verifyCivicGatepass(gatepass: string, deviceInfo: any): Promise<{status: string, securityLevel: number}> {
+  async verifyAuth(): Promise<boolean> {
     try {
-      // Verify gatepass with backend
-      const response = await fetch(`${this.backendUrl}/api/auth/civic/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userAddress: this.userAddress,
-          gatepass: gatepass,
-          deviceInfo: JSON.stringify(deviceInfo),
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        if (error.requiresAdditionalVerification) {
-          throw new Error('Additional verification required');
-        }
-        throw new Error(error.error || 'Verification failed');
-      }
-
-      return await response.json();
+      const status = await this.auth.status;
+      return status === ADAPTER_STATUS.CONNECTED;
     } catch (error) {
       console.error('Civic verification failed:', error);
+      return false;
+    }
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.auth.logout();
+      this.web3AuthProvider = null;
+    } catch (error) {
+      console.error('Logout failed:', error);
       throw error;
     }
   }
 
-  async checkAuthStatus(): Promise<{
-    status: string;
-    securityLevel: number;
-    riskScore: number;
-    securityFlags: string[];
-  }> {
+  async getSecurityVerification(): Promise<SecurityVerificationResult> {
     try {
-      const response = await fetch(
-        `${this.backendUrl}/api/auth/civic/status?userAddress=${this.userAddress}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to check auth status');
+      if (!this.web3AuthProvider) {
+        throw new Error('Not authenticated');
       }
 
-      return await response.json();
+      const userInfo = await this.auth.getUserInfo();
+      const status = await this.auth.status;
+
+      // Perform security checks
+      const riskFactors: string[] = [];
+      let securityLevel = 3; // High security by default
+
+      // Check authentication status
+      if (status !== ADAPTER_STATUS.CONNECTED) {
+        riskFactors.push('Not fully connected');
+        securityLevel--;
+      }
+
+      // Check email verification
+      if (!userInfo.email || userInfo.verifierId !== 'email') {
+        riskFactors.push('Email not verified');
+        securityLevel--;
+      }
+
+      // Check provider
+      if (!this.web3AuthProvider.isConnected) {
+        riskFactors.push('Provider disconnected');
+        securityLevel--;
+      }
+
+      // Additional security checks for Solana
+      try {
+        const publicKey = await this.getPublicKey();
+        if (!publicKey) {
+          riskFactors.push('No Solana public key');
+          securityLevel--;
+        }
+      } catch {
+        riskFactors.push('Solana wallet error');
+        securityLevel--;
+      }
+
+      return {
+        isValid: securityLevel > 0,
+        securityLevel,
+        riskFactors
+      };
+
     } catch (error) {
-      console.error('Failed to check auth status:', error);
-      throw error;
+      console.error('Security verification failed:', error);
+      return {
+        isValid: false,
+        securityLevel: 0,
+        riskFactors: ['Authentication error']
+      };
     }
   }
 
-  // Helper method to collect device information
-  static collectDeviceInfo(): any {
-    return {
-      userAgent: navigator.userAgent,
-      language: navigator.language,
-      platform: navigator.platform,
-      screenResolution: `${window.screen.width}x${window.screen.height}`,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      timestamp: new Date().toISOString(),
-    };
+  async getPublicKey(): Promise<PublicKey | null> {
+    if (!this.web3AuthProvider) return null;
+    const accounts = await this.web3AuthProvider.requestAccounts();
+    return accounts.length > 0 ? new PublicKey(accounts[0]) : null;
+  }
+
+  async getProvider(): Promise<any> {
+    return this.web3AuthProvider;
+  }
+
+  async getUserInfo(): Promise<any> {
+    if (!this.auth) return null;
+    return await this.auth.getUserInfo();
   }
 }

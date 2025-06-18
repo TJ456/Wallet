@@ -37,7 +37,7 @@ const ScamReportingABI = `[
             {
                 "internalType": "uint256",
                 "name": "",
-                "type": "uint256"
+                "type": "uint256" 
             }
         ],
         "stateMutability": "view",

@@ -21,7 +21,7 @@ func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gi
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000", "https://*.onrender.com", "https://*.vercel.app"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Wallet-Address", "X-Wallet-Signature", "X-Wallet-Message"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Wallet-Address", "X-Wallet-Signature", "X-Wallet-Message", "X-User-Address"},
 		AllowCredentials: true,
 	}))
 	// Health check endpoint for Render and monitoring
@@ -48,12 +48,17 @@ func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gi
 	}
 
 	aiService := services.NewAIService(analyticsService)
-	blockchainService, err := services.NewBlockchainService()
-	if err != nil {
-		log.Printf("Warning: Failed to initialize blockchain service: %v", err)
-		// Create a mock blockchain service for development
-		blockchainService = &services.BlockchainService{}
+
+	// Initialize Civic Auth service
+	civicConfig := &services.CivicConfig{
+		GatekeeperNetwork: os.Getenv("CIVIC_GATEKEEPER_NETWORK"),
+		ChainId:          11155111, // Sepolia testnet
+		ApiKey:           os.Getenv("CIVIC_API_KEY"),
+		Stage:            os.Getenv("CIVIC_STAGE"), // "prod" or "preprod"
 	}
+	
+	civicService := services.NewCivicAuthService(db, civicConfig)
+	civicHandler := handlers.NewCivicAuthHandler(civicService)
 
 	// Create handler instances with the database connection and services
 	firewallHandler := handlers.NewFirewallHandler(db, aiService, telegramService)
@@ -68,6 +73,11 @@ func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gi
 	// Public API routes
 	api := r.Group("/api")
 	{
+		// Civic Auth endpoints
+		api.POST("/auth/civic/initiate", civicHandler.InitiateAuthHandler)
+		api.POST("/auth/civic/verify", civicHandler.VerifyGatepassHandler)
+		api.GET("/auth/civic/status", civicHandler.GetAuthStatusHandler)
+
 		// Auth endpoints
 		api.POST("/auth/verify", authHandler.VerifyWalletSignature)
 		api.GET("/auth/nonce", authHandler.GetSignatureNonce)
@@ -84,6 +94,17 @@ func SetupMainRouter(db *gorm.DB, telegramService *services.TelegramService) *gi
 		api.GET("/analytics/risk/:address", analyticsHandler.GetWalletRiskScore)
 		api.POST("/analytics/bulk", analyticsHandler.GetBulkWalletAnalytics)
 		api.POST("/analytics/export", analyticsHandler.ExportMLDataset)
+	}
+
+	// Create a new protected group that requires both Web3 and Civic Auth
+	secureAuth := r.Group("/api/secure")
+	secureAuth.Use(middleware.Web3AuthMiddleware(blockchainService))
+	secureAuth.Use(civicHandler.RequireCivicAuth())
+	{
+		// High-security operations that require both wallet signature and Civic verification
+		secureAuth.POST("/transaction/high-value", firewallHandler.AnalyzeHighValueTransaction)
+		secureAuth.POST("/report/critical", reportHandler.CreateCriticalReport)
+		secureAuth.POST("/recovery/initiate", reportHandler.InitiateRecovery)
 	}
 
 	// Web3 authenticated routes (using wallet signature)

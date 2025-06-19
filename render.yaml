@@ -6,8 +6,10 @@ services:
     region: ohio
     branch: main
     rootDir: backend
-    buildCommand: go mod tidy && go build -o server
-    startCommand: ./server
+    buildCommand: go mod download && go mod tidy && go build -o server
+    startCommand: ./start.sh
+    autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: ENVIRONMENT
         value: production

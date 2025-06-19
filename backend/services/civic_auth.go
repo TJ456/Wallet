@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"github.com/civic/civic-pass-api/pkg/gateway"
+	"github.com/civicteam/gateway-go-client/pkg/gateway"
 	"gorm.io/gorm"
 )
 

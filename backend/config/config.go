@@ -11,18 +11,20 @@ import (
 
 // Config holds all configuration settings
 type Config struct {
-	ServerPort   string
-	DatabaseURL  string
-	MLModelURL   string
-	JWTSecret    string
-	Environment  string
+	ServerPort    string
+	DatabaseURL   string
+	MLModelURL    string
+	JWTSecret     string
+	Environment   string
 	TelegramToken string
 }
 
 // LoadConfig loads configuration from .env file and environment variables
 func LoadConfig() (*Config, error) {
-	// Load .env file if it exists
-	_ = godotenv.Load()
+	// Load .env file if it exists and we're not in production
+	if os.Getenv("ENVIRONMENT") != "production" {
+		_ = godotenv.Load()
+	}
 
 	// Special handling for Render which uses PORT instead of SERVER_PORT
 	serverPort := os.Getenv("PORT")
@@ -32,11 +34,22 @@ func LoadConfig() (*Config, error) {
 
 	cfg := &Config{
 		ServerPort:    serverPort,
-		DatabaseURL:   getEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/wallet"),
-		MLModelURL:    getEnv("ML_MODEL_URL", "http://localhost:5000/predict"),
-		JWTSecret:     getEnv("JWT_SECRET", "your-secret-key"),
-		Environment:   getEnv("ENVIRONMENT", "development"),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgresql://Records_owner:npg_fELAr2DGw3TZ@ep-odd-shape-a4yij4cq-pooler.us-east-1.aws.neon.tech/Records?sslmode=require"),
+		MLModelURL:    getEnv("ML_MODEL_URL", "https://ml-fraud-transaction-detection.onrender.com/predict"),
+		JWTSecret:     getEnv("JWT_SECRET", "zH6yP9xK2mN4qR8sL5wA3fD1cB7vE0uI"),
+		Environment:   getEnv("ENVIRONMENT", "production"),
 		TelegramToken: getEnv("TELEGRAM_TOKEN", ""),
+	}
+
+	// Validate configuration
+	if cfg.DatabaseURL == "" {
+		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+	if cfg.MLModelURL == "" {
+		return nil, fmt.Errorf("ML_MODEL_URL is required")
+	}
+	if cfg.JWTSecret == "" {
+		return nil, fmt.Errorf("JWT_SECRET is required")
 	}
 
 	return cfg, nil
@@ -44,20 +57,34 @@ func LoadConfig() (*Config, error) {
 
 // InitDB initializes the database connection
 func InitDB(cfg *Config) (*gorm.DB, error) {
-	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{
+		PrepareStmt: true, // Enable prepared statement cache
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// TODO: Apply migrations here
-	// db.AutoMigrate(&models.Transaction{}, &models.Report{}, &models.DAOVote{})
+	// Configure connection pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database instance: %w", err)
+	}
+
+	// Set reasonable pool settings
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+
+	// Verify connection
+	if err := sqlDB.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
 
 	return db, nil
 }
 
-// getEnv retrieves an environment variable or returns a default value
+// getEnv gets an environment variable or returns the default value
 func getEnv(key, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
+	if value := os.Getenv(key); value != "" {
 		return value
 	}
 	return defaultValue

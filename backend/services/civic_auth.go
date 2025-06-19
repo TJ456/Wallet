@@ -110,7 +110,7 @@ func (s *CivicAuthService) InitiateAuth(userAddress string, deviceInfo string) (
 		GatekeeperNetwork: s.config.GatekeeperNetwork,
 		TokenExpiry:       time.Now().Add(24 * time.Hour),
 		Status:           "pending",
-		GatePass:         token.Token,
+		GatePass:         token,
 		SecurityLevel:    1,
 		DeviceHash:      generateDeviceHash(deviceInfo),
 		RiskScore:       0.0,

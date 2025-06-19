@@ -36,7 +36,7 @@ func LoadConfig() (*Config, error) {
 		ServerPort:    serverPort,
 		DatabaseURL:   getEnv("DATABASE_URL", "postgresql://Records_owner:npg_fELAr2DGw3TZ@ep-odd-shape-a4yij4cq-pooler.us-east-1.aws.neon.tech/Records?sslmode=require"),
 		MLModelURL:    getEnv("ML_MODEL_URL", "https://ml-fraud-transaction-detection.onrender.com/predict"),
-		JWTSecret:     getEnv("JWT_SECRET", "zH6yP9xK2mN4qR8sL5wA3fD1cB7vE0uI"),
+		JWTSecret:     getEnv("JWT_SECRET", ""),
 		Environment:   getEnv("ENVIRONMENT", "production"),
 		TelegramToken: getEnv("TELEGRAM_TOKEN", ""),
 	}

@@ -1,16 +1,14 @@
 # Use the official Go image as a builder - Alpine for smaller image
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Install build tools
 RUN apk add --no-cache git build-base
 
 WORKDIR /app
 
-# Fix go.mod versions before copying
+# Copy and download dependencies
 COPY go.mod go.sum ./
-RUN sed -i 's/go 1.23.0/go 1.21.0/' go.mod && \
-    sed -i 's/toolchain go1.24.2//' go.mod && \
-    go mod download
+RUN go mod download
 
 # Copy the entire backend directory
 COPY . .

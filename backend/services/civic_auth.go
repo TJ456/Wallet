@@ -2,20 +2,20 @@ package services
 
 import (
 	"Wallet/backend/models"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
-	"github.com/civicteam/gateway-go-client/pkg/gateway"
 	"gorm.io/gorm"
 )
 
 type CivicAuthService struct {
-	db            *gorm.DB
-	gatewayClient *gateway.Client
-	config        *CivicConfig
+	db     *gorm.DB
+	client *http.Client
+	config *CivicConfig
 }
 
 type CivicConfig struct {
@@ -23,15 +23,35 @@ type CivicConfig struct {
 	ChainId           int64
 	ApiKey            string
 	Stage             string // "prod" or "preprod"
+	GatewayToken      string
+	CollectionFlow    string
 }
 
 func NewCivicAuthService(db *gorm.DB, config *CivicConfig) *CivicAuthService {
-	client := gateway.NewClient(config.ApiKey, config.Stage == "prod")
-	return &CivicAuthService{
-		db:            db,
-		gatewayClient: client,
-		config:        config,
+	client := &http.Client{
+		Timeout: time.Second * 10,
 	}
+	return &CivicAuthService{
+		db:     db,
+		client: client,
+		config: config,
+	}
+}
+
+// getBaseURL returns the appropriate Civic API URL based on stage
+func (s *CivicAuthService) getBaseURL() string {
+	if s.config.Stage == "prod" {
+		return "https://gatekeeper.civic.com/v1"
+	}
+	return "https://gatekeeper.staging.civic.com/v1"
+}
+
+// getAuthBaseURL returns the appropriate Civic Auth URL based on stage
+func (s *CivicAuthService) getAuthBaseURL() string {
+	if s.config.Stage == "prod" {
+		return "https://auth.civic.com"
+	}
+	return "https://auth.staging.civic.com"
 }
 
 // InitiateAuth starts the Civic authentication process
@@ -41,16 +61,48 @@ func (s *CivicAuthService) InitiateAuth(userAddress string, deviceInfo string) (
 	if err := s.db.Where("user_address = ? AND token_expiry > ?", userAddress, time.Now()).First(&existingSession).Error; err == nil {
 		return &existingSession, nil
 	}
+	// Create new gatepass token using Civic's REST API
+	baseURL := s.getBaseURL()
 
-	// Create new gatepass token
-	token, err := s.gatewayClient.CreateToken(context.Background(), &gateway.CreateTokenRequest{
-		GatekeeperNetwork: s.config.GatekeeperNetwork,
-		ChainId:           s.config.ChainId,
-		WalletAddress:     userAddress,
-	})
+	reqBody := map[string]interface{}{
+		"gatekeeperNetwork": s.config.GatekeeperNetwork,
+		"chainId":           s.config.ChainId,
+		"walletAddress":     userAddress,
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %v", err)
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), 
+		"POST", 
+		baseURL+"/gateway/token", 
+		bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", s.config.ApiKey)
+
+	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Civic token: %v", err)
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("civic API error: %d", resp.StatusCode)
+	}
+
+	var tokenResp struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	token := tokenResp.Token
 
 	// Create new session with enhanced security
 	session := &models.CivicAuthSession{
@@ -80,12 +132,43 @@ func (s *CivicAuthService) VerifyGatepass(userAddress, gatepass string, deviceIn
 	if err := s.db.Where("user_address = ? AND gate_pass = ?", userAddress, gatepass).First(&session).Error; err != nil {
 		return nil, errors.New("invalid session")
 	}
+	// Verify with Civic gateway using REST API
+	baseURL := s.getBaseURL()
 
-	// Verify with Civic gateway
-	verified, err := s.gatewayClient.VerifyToken(context.Background(), gatepass)
-	if err != nil || !verified {
+	req, err := http.NewRequestWithContext(context.Background(), 
+		"GET", 
+		fmt.Sprintf("%s/gateway/token/%s", baseURL, gatepass), 
+		nil)
+	if err != nil {
 		s.logVerificationAttempt(userAddress, "verification", false, deviceInfo)
-		return nil, errors.New("civic verification failed")
+		return nil, fmt.Errorf("failed to create verification request: %v", err)
+	}
+
+	req.Header.Set("X-API-Key", s.config.ApiKey)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		s.logVerificationAttempt(userAddress, "verification", false, deviceInfo)
+		return nil, fmt.Errorf("failed to verify token: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		s.logVerificationAttempt(userAddress, "verification", false, deviceInfo)
+		return nil, fmt.Errorf("civic verification failed: %d", resp.StatusCode)
+	}
+
+	var verifyResp struct {
+		IsValid bool `json:"isValid"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&verifyResp); err != nil {
+		s.logVerificationAttempt(userAddress, "verification", false, deviceInfo)
+		return nil, fmt.Errorf("failed to decode verification response: %v", err)
+	}
+
+	if !verifyResp.IsValid {
+		s.logVerificationAttempt(userAddress, "verification", false, deviceInfo)
+		return nil, errors.New("civic verification failed: token invalid")
 	}
 
 	// Enhanced Security Checks

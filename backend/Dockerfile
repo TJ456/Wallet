@@ -1,24 +1,29 @@
 # Build stage
 FROM golang:1.24.2-bullseye AS builder
 
-WORKDIR /build/Wallet/backend
+# Set up proper Go path for your module
+WORKDIR /go/src/Wallet
 
-# Install build essentials
-RUN apt-get update && \
-    apt-get install -y build-essential git ca-certificates && \
-    update-ca-certificates
+# Copy backend code to the correct module path
+COPY . backend/
 
-# Copy go.mod and go.sum first for better caching
-COPY go.mod go.sum ./
+# Set working directory to backend
+WORKDIR /go/src/Wallet/backend
 
 # Download dependencies
-RUN go mod download && go mod verify
+RUN go mod download && \
+    go mod verify
 
-# Copy the rest of the code
-COPY . .
+# Show debug information
+RUN echo "=== Directory Contents ===" && \
+    ls -la && \
+    echo "=== Go Environment ===" && \
+    go env && \
+    echo "=== Module Info ===" && \
+    go list -m all
 
-# Build the binary (with verbose output)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o server main.go
+# Build with verbose output
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o server .
 
 # Final stage
 FROM debian:bullseye-slim
@@ -37,9 +42,9 @@ RUN useradd -m -u 1001 appuser && \
 # Set up app directory
 WORKDIR /app
 
-# Copy binary and start script from builder
-COPY --from=builder /build/Wallet/backend/server ./
-COPY --from=builder /build/Wallet/backend/start.sh ./
+# ✅ FIXED: Correct build paths
+COPY --from=builder /go/src/Wallet/backend/server ./  
+COPY --from=builder /go/src/Wallet/backend/start.sh ./  
 
 # Set permissions
 RUN chmod +x server start.sh && \

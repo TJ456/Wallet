@@ -1,10 +1,12 @@
-services:  - type: web
+services:
+  - type: web
     name: wallet-backend
-    env: docker
-    repo: https://github.com/TJ456/Wallet1.git
-    region: ohio  # Choose your preferred region
+    env: go
+    region: ohio
     branch: main
-    dockerfilePath: ./backend/Dockerfile  # Use the normal Dockerfile
+    rootDir: backend
+    buildCommand: go build -o app
+    startCommand: ./start.sh
     numInstances: 1
     healthCheckPath: /health
     buildFilter:

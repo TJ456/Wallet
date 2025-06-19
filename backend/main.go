@@ -6,6 +6,9 @@ import (
 	"Wallet/backend/services"
 	"fmt"
 	"log"
+	"os"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -24,10 +27,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-
 	// Run database migrations and setup
 	log.Println("Setting up database schema...")
-	if err := InitializeDatabase(db); err != nil {
+	if err := config.InitializeDatabase(db); err != nil {
 		log.Fatalf("Failed to initialize database schema: %v", err)
 	}
 	// Initialize Telegram service
@@ -42,12 +44,26 @@ func main() {
 		}
 	} else {
 		log.Println("Telegram webhooks not set in development mode. Use a tunnel like ngrok for local testing.")
-	}
-	// Setup router with services
+	}	// Setup router with services
 	log.Println("Setting up API routes...")
 	r := routes.SetupMainRouter(db, telegramService)
 
-	// Print startup banner
+	// Get port from environment or use default
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Set gin mode
+	if cfg.Environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// Start server
+	log.Printf("Server starting on port %s...", port)
+	if err := r.Run(":" + port); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 	fmt.Println(`
     __        __    _ _      _            _____
     \ \      / /_ _| | | ___| |_   ___   |  ___|_ _ ___ ___

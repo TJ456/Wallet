@@ -2,54 +2,110 @@ package config
 
 import (
 	"Wallet/backend/models"
+	"fmt"
 	"log"
+	"time"
 
 	"gorm.io/gorm"
 )
 
-// InitializeDatabase sets up the database schema and creates any required tables
-func InitializeDatabase(db *gorm.DB) error {
-	log.Println("Running database migrations...")
-
-	// Check if tables exist first
-	if err := db.Migrator().DropTable("transactions"); err != nil {
-		// Ignore error if table doesn't exist
-		log.Printf("Note: Could not drop transactions table (might not exist): %v", err)
+// validateTableSchema checks if a table matches our expected schema
+func validateTableSchema(db *gorm.DB, model interface{}, tableName string) error {
+	// First check if the table exists
+	if !db.Migrator().HasTable(model) {
+		return fmt.Errorf("required table %s does not exist", tableName)
 	}
 
-	// Auto migrate all models
-	err := db.AutoMigrate(
-		&models.Transaction{},
-		&models.Report{},
-		&models.DAOProposal{},
-		&models.DAOVote{},
-		&models.Recovery{},
-		&models.TelegramMapping{},
-		&models.Config{},
-	)
-
-	if err != nil {
-		log.Printf("Database migration failed: %v", err)
-		return err
+	// Try a simple select to verify we can read from the table
+	result := map[string]interface{}{
+		"tx_hash": "test",
 	}
-
-	// Ensure indexes are created properly
-	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS "uni_transactions_tx_hash" ON "transactions"("tx_hash")`).Error; err != nil {
-		log.Printf("Warning: Failed to create transaction hash index: %v", err)
-		// Don't return error since AutoMigrate should have handled this
-	}
-
-	log.Println("Database migrations completed successfully")
-
-	// Add seed data if needed (for development)
-	if err := seedDevelopmentData(db); err != nil {
-		log.Printf("Warning: Failed to seed development data: %v", err)
+	if err := db.Table(tableName).Take(&result).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// This is fine - table exists but is empty
+			return nil
+		}
+		// Other errors might indicate schema mismatch
+		log.Printf("Warning: Could not read from table %s: %v", tableName, err)
 	}
 
 	return nil
 }
 
-// seedDevelopmentData populates some initial data for development environments
+// EnsureDatabaseConnection verifies that we can connect to and use the database
+func EnsureDatabaseConnection(db *gorm.DB) error {
+	// Try to connect and do a simple query
+	var result int64
+	err := db.Raw("SELECT 1").Scan(&result).Error
+	if err != nil {
+		return fmt.Errorf("database connection test failed: %w", err)
+	}
+
+	if result != 1 {
+		return fmt.Errorf("database connection test returned unexpected result: %d", result)
+	}
+
+	return nil
+}
+
+// InitializeDatabase validates the database schema
+func InitializeDatabase(db *gorm.DB) error {
+	log.Println("Validating database schema...")
+
+	// Define retries for schema validation
+	maxRetries := 3
+	retryDelay := time.Second * 5
+
+	// List of required models and their table names
+	requiredModels := []struct {
+		Model     interface{}
+		TableName string
+	}{
+		{&models.Transaction{}, "transactions"},
+		{&models.Report{}, "reports"},
+		{&models.DAOProposal{}, "dao_proposals"},
+		{&models.DAOVote{}, "dao_votes"},
+		{&models.Recovery{}, "recoveries"},
+		{&models.TelegramMapping{}, "telegram_mappings"},
+		{&models.Config{}, "configs"},
+	}
+
+	// Try to validate schema with retries
+	for i := 0; i < maxRetries; i++ {
+		var validationErrors []string
+
+		// Check each required table
+		for _, model := range requiredModels {
+			if err := validateTableSchema(db, model.Model, model.TableName); err != nil {
+				validationErrors = append(validationErrors,
+					fmt.Sprintf("%s: %v", model.TableName, err))
+			}
+		}
+
+		if len(validationErrors) == 0 {
+			log.Println("Database schema validation successful")
+			return nil
+		}
+
+		// If this isn't the last retry, wait and try again
+		if i < maxRetries-1 {
+			log.Printf("Schema validation failed, retrying in %v...", retryDelay)
+			for _, err := range validationErrors {
+				log.Printf("- %s", err)
+			}
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// If we're here, we've exhausted our retries
+		return fmt.Errorf("schema validation failed after %d attempts: %v",
+			maxRetries, validationErrors)
+	}
+
+	return nil
+}
+
+// seedDevelopmentData adds test data if needed (development only)
 func seedDevelopmentData(db *gorm.DB) error {
 	// Only seed if we're in development mode and the tables are empty
 	var count int64

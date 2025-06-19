@@ -6,18 +6,18 @@ RUN apk add --no-cache git build-base
 
 WORKDIR /app
 
-# Copy and download dependencies
-COPY go.mod go.sum ./
-RUN go mod tidy && \
-    go get github.com/civicteam/gateway-go-client && \
-    go mod download
-
-# Copy the entire backend directory
+# Copy the entire backend directory first
 COPY . .
 
-# Build without cache mounting (for compatibility with various build systems)
+# Set up go.mod and dependencies
+RUN go mod init Wallet/backend || true && \
+    go mod tidy && \
+    go get -u github.com/civicteam/gateway-go-client/pkg/gateway@latest && \
+    go mod tidy
+
+# Build the application
 ENV CGO_ENABLED=0
-RUN go mod tidy && go build -ldflags="-s -w" -o out .
+RUN go build -ldflags="-s -w" -o out .
 
 # Use a smaller image for the final stage
 FROM alpine:latest

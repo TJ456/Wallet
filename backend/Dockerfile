@@ -4,27 +4,33 @@ FROM golang:1.24.2-alpine AS builder
 # Install build tools and git
 RUN apk add --no-cache git build-base gcc musl-dev
 
-# Set up proper Go path
-WORKDIR /go/src/Wallet/backend
+# Set up proper Go path and create module structure
+WORKDIR /app
+RUN mkdir -p Wallet/backend
 
-# Copy only necessary files first
-COPY go.mod go.sum ./
+# Copy the entire backend directory
+COPY . Wallet/backend/
 
-# Download and verify dependencies
-RUN go mod download && \
+# Set working directory to the module path
+WORKDIR /app/Wallet/backend
+
+# Initialize and tidy the module
+RUN cd /app/Wallet/backend && \
+    go mod tidy && \
+    go mod download && \
     go mod verify
 
-# Copy the rest of the application
-COPY . .
-
-# Set necessary environment variables
+# Set build environment variables
 ENV CGO_ENABLED=0 \
     GOOS=linux \
     GOARCH=amd64 \
     GO111MODULE=on
 
-# Attempt build with verbose output
-RUN GOFLAGS="-v" go build -o app main.go
+# Build the application with error output
+RUN cd /app/Wallet/backend && \
+    pwd && \
+    ls -la && \
+    go build -v -o app .
 
 # Stage 2: Create the final image
 FROM alpine:latest

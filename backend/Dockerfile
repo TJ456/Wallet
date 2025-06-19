@@ -1,27 +1,31 @@
 # Use the official Go image as a builder - Alpine for smaller image
-FROM golang:1.24-alpine AS builder
+FROM golang:1.24.2-alpine AS builder
 
-# Install build tools
-RUN apk add --no-cache git build-base
+# Install build tools and git (needed for private repos)
+RUN apk add --no-cache git build-base gcc musl-dev
 
+# Set working directory
 WORKDIR /app
 
-# Copy go.mod and go.sum first (if they exist)
-COPY go.mod go.sum* ./
+# Copy go.mod and go.sum first for better caching
+COPY go.mod go.sum ./
 
-# Initialize module if needed and download dependencies
-RUN if [ ! -f go.mod ]; then \
-    go mod init Wallet/backend && \
-    go mod tidy; \
-    fi
+# Download dependencies and verify modules
+RUN go mod download && \
+    go mod verify
 
-# Copy the rest of the code
+# Copy the rest of the backend code
 COPY . .
 
-# Final tidying and build
-ENV CGO_ENABLED=0
-RUN go mod tidy && \
-    go build -ldflags="-s -w" -o out .
+# Build the application with optimizations
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64
+
+# Clean and build
+RUN go clean && \
+    go mod tidy && \
+    go build -tags netgo -a -v -ldflags="-s -w -extldflags '-static'" -o out .
 
 # Use a smaller image for the final stage
 FROM alpine:latest

@@ -1,11 +1,13 @@
 services:
   - type: web
     name: wallet-backend
-    env: docker
+    env: go
     repo: https://github.com/TJ456/Wallet1.git
     region: ohio
     branch: main
-    dockerfilePath: ./backend/Dockerfile
+    rootDir: backend
+    buildCommand: go mod tidy && go build -o server
+    startCommand: ./server
     envVars:
       - key: ENVIRONMENT
         value: production

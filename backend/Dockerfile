@@ -1,16 +1,29 @@
+# Use official Go image
 FROM golang:1.24.2
 
-WORKDIR /go/src/app
+# Set working directory
+WORKDIR /app
 
-COPY . .
+# Copy go mod files first
+COPY go.mod go.sum ./
 
+# Download dependencies
 RUN go mod download
 
+# Copy the rest of the code
+COPY . .
+
+# Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -v -o app
 
+# Make the start script executable
+RUN chmod +x start.sh
+
+# Expose the port
 EXPOSE 8080
 
-CMD ["./app"]
+# Run the application
+CMD ["./start.sh"]
 
 # Stage 2: Create the final image
 FROM alpine:latest

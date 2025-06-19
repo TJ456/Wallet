@@ -13,9 +13,9 @@ import (
 )
 
 type CivicAuthService struct {
-	db     *gorm.DB
-	client *http.Client
-	config *CivicConfig
+	DB     *gorm.DB
+	Client *http.Client
+	Config *CivicConfig
 }
 
 type CivicConfig struct {
@@ -32,15 +32,15 @@ func NewCivicAuthService(db *gorm.DB, config *CivicConfig) *CivicAuthService {
 		Timeout: time.Second * 10,
 	}
 	return &CivicAuthService{
-		db:     db,
-		client: client,
-		config: config,
+		DB:     db,
+		Client: client,
+		Config: config,
 	}
 }
 
 // getBaseURL returns the appropriate Civic API URL based on stage
 func (s *CivicAuthService) getBaseURL() string {
-	if s.config.Stage == "prod" {
+	if s.Config.Stage == "prod" {
 		return "https://gatekeeper.civic.com/v1"
 	}
 	return "https://gatekeeper.staging.civic.com/v1"
@@ -48,7 +48,7 @@ func (s *CivicAuthService) getBaseURL() string {
 
 // getAuthBaseURL returns the appropriate Civic Auth URL based on stage
 func (s *CivicAuthService) getAuthBaseURL() string {
-	if s.config.Stage == "prod" {
+	if s.Config.Stage == "prod" {
 		return "https://auth.civic.com"
 	}
 	return "https://auth.staging.civic.com"
@@ -58,15 +58,15 @@ func (s *CivicAuthService) getAuthBaseURL() string {
 func (s *CivicAuthService) InitiateAuth(userAddress string, deviceInfo string) (*models.CivicAuthSession, error) {
 	// Check for existing valid session
 	var existingSession models.CivicAuthSession
-	if err := s.db.Where("user_address = ? AND token_expiry > ?", userAddress, time.Now()).First(&existingSession).Error; err == nil {
+	if err := s.DB.Where("user_address = ? AND token_expiry > ?", userAddress, time.Now()).First(&existingSession).Error; err == nil {
 		return &existingSession, nil
 	}
 	// Create new gatepass token using Civic's REST API
 	baseURL := s.getBaseURL()
 
 	reqBody := map[string]interface{}{
-		"gatekeeperNetwork": s.config.GatekeeperNetwork,
-		"chainId":           s.config.ChainId,
+		"gatekeeperNetwork": s.Config.GatekeeperNetwork,
+		"chainId":           s.Config.ChainId,
 		"walletAddress":     userAddress,
 	}
 	jsonBody, err := json.Marshal(reqBody)
@@ -83,9 +83,9 @@ func (s *CivicAuthService) InitiateAuth(userAddress string, deviceInfo string) (
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Key", s.config.ApiKey)
+	req.Header.Set("X-API-Key", s.Config.ApiKey)
 
-	resp, err := s.client.Do(req)
+	resp, err := s.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Civic token: %v", err)
 	}
@@ -107,7 +107,7 @@ func (s *CivicAuthService) InitiateAuth(userAddress string, deviceInfo string) (
 	// Create new session with enhanced security
 	session := &models.CivicAuthSession{
 		UserAddress:       userAddress,
-		GatekeeperNetwork: s.config.GatekeeperNetwork,
+		GatekeeperNetwork: s.Config.GatekeeperNetwork,
 		TokenExpiry:       time.Now().Add(24 * time.Hour),
 		Status:           "pending",
 		GatePass:         token,
@@ -116,7 +116,7 @@ func (s *CivicAuthService) InitiateAuth(userAddress string, deviceInfo string) (
 		RiskScore:       0.0,
 	}
 
-	if err := s.db.Create(session).Error; err != nil {
+	if err := s.DB.Create(session).Error; err != nil {
 		return nil, fmt.Errorf("failed to create auth session: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func (s *CivicAuthService) InitiateAuth(userAddress string, deviceInfo string) (
 // VerifyGatepass validates the Civic gatepass and implements additional security measures
 func (s *CivicAuthService) VerifyGatepass(userAddress, gatepass string, deviceInfo string) (*models.CivicAuthSession, error) {
 	var session models.CivicAuthSession
-	if err := s.db.Where("user_address = ? AND gate_pass = ?", userAddress, gatepass).First(&session).Error; err != nil {
+	if err := s.DB.Where("user_address = ? AND gate_pass = ?", userAddress, gatepass).First(&session).Error; err != nil {
 		return nil, errors.New("invalid session")
 	}
 	// Verify with Civic gateway using REST API
@@ -144,9 +144,9 @@ func (s *CivicAuthService) VerifyGatepass(userAddress, gatepass string, deviceIn
 		return nil, fmt.Errorf("failed to create verification request: %v", err)
 	}
 
-	req.Header.Set("X-API-Key", s.config.ApiKey)
+	req.Header.Set("X-API-Key", s.Config.ApiKey)
 
-	resp, err := s.client.Do(req)
+	resp, err := s.Client.Do(req)
 	if err != nil {
 		s.logVerificationAttempt(userAddress, "verification", false, deviceInfo)
 		return nil, fmt.Errorf("failed to verify token: %v", err)
@@ -181,7 +181,7 @@ func (s *CivicAuthService) VerifyGatepass(userAddress, gatepass string, deviceIn
 		if session.RiskScore > 0.7 {
 			session.SecurityLevel = 3
 			session.Status = "needs_additional_verification"
-			s.db.Save(&session)
+			s.DB.Save(&session)
 			return nil, errors.New("additional verification required due to high risk score")
 		}
 	}
@@ -189,11 +189,20 @@ func (s *CivicAuthService) VerifyGatepass(userAddress, gatepass string, deviceIn
 	// Update session status
 	session.Status = "verified"
 	session.LastVerified = time.Now()
-	if err := s.db.Save(&session).Error; err != nil {
+	if err := s.DB.Save(&session).Error; err != nil {
 		return nil, err
 	}
 
 	s.logVerificationAttempt(userAddress, "verification", true, deviceInfo)
+	return &session, nil
+}
+
+// GetUserSession retrieves the latest authentication session for a user
+func (s *CivicAuthService) GetUserSession(userAddress string) (*models.CivicAuthSession, error) {
+	var session models.CivicAuthSession
+	if err := s.DB.Where("user_address = ?", userAddress).First(&session).Error; err != nil {
+		return nil, err
+	}
 	return &session, nil
 }
 
@@ -203,7 +212,7 @@ func (s *CivicAuthService) performSecurityChecks(userAddress, deviceInfo string)
 	
 	// Check for multiple devices
 	var deviceCount int64
-	s.db.Model(&models.CivicAuthSession{}).
+	s.DB.Model(&models.CivicAuthSession{}).
 		Where("user_address = ? AND device_hash != ?", userAddress, generateDeviceHash(deviceInfo)).
 		Count(&deviceCount)
 	
@@ -213,7 +222,7 @@ func (s *CivicAuthService) performSecurityChecks(userAddress, deviceInfo string)
 
 	// Check for rapid verification attempts
 	var recentAttempts int64
-	s.db.Model(&models.CivicVerificationLog{}).
+	s.DB.Model(&models.CivicVerificationLog{}).
 		Where("user_address = ? AND created_at > ?", userAddress, time.Now().Add(-5*time.Minute)).
 		Count(&recentAttempts)
 	
@@ -224,7 +233,7 @@ func (s *CivicAuthService) performSecurityChecks(userAddress, deviceInfo string)
 	// Geographic anomaly detection
 	if geoLocation := extractGeoLocation(deviceInfo); geoLocation != "" {
 		var lastLocation string
-		s.db.Model(&models.CivicVerificationLog{}).
+		s.DB.Model(&models.CivicVerificationLog{}).
 			Where("user_address = ? AND geo_location != ''", userAddress).
 			Order("created_at desc").
 			Limit(1).
@@ -248,7 +257,7 @@ func (s *CivicAuthService) logVerificationAttempt(userAddress, verificationType 
 		GeoLocation:     extractGeoLocation(deviceInfo),
 		IPAddress:       extractIPAddress(deviceInfo),
 	}
-	s.db.Create(log)
+	s.DB.Create(log)
 }
 
 // Helper functions

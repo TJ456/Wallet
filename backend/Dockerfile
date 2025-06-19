@@ -8,14 +8,16 @@ WORKDIR /app
 
 # Copy and download dependencies
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod tidy && \
+    go get github.com/civicteam/gateway-go-client && \
+    go mod download
 
 # Copy the entire backend directory
 COPY . .
 
 # Build without cache mounting (for compatibility with various build systems)
 ENV CGO_ENABLED=0
-RUN go build -ldflags="-s -w" -o out .
+RUN go mod tidy && go build -ldflags="-s -w" -o out .
 
 # Use a smaller image for the final stage
 FROM alpine:latest

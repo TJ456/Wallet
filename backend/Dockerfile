@@ -1,36 +1,16 @@
-# Stage 1: Build the Go binary
-FROM golang:1.24.2-alpine AS builder
+FROM golang:1.24.2
 
-# Install build tools and git
-RUN apk add --no-cache git build-base gcc musl-dev
+WORKDIR /go/src/app
 
-# Set up proper Go path and create module structure
-WORKDIR /app
-RUN mkdir -p Wallet/backend
+COPY . .
 
-# Copy the entire backend directory
-COPY . Wallet/backend/
+RUN go mod download
 
-# Set working directory to the module path
-WORKDIR /app/Wallet/backend
+RUN CGO_ENABLED=0 GOOS=linux go build -v -o app
 
-# Initialize and tidy the module
-RUN cd /app/Wallet/backend && \
-    go mod tidy && \
-    go mod download && \
-    go mod verify
+EXPOSE 8080
 
-# Set build environment variables
-ENV CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64 \
-    GO111MODULE=on
-
-# Build the application with error output
-RUN cd /app/Wallet/backend && \
-    pwd && \
-    ls -la && \
-    go build -v -o app .
+CMD ["./app"]
 
 # Stage 2: Create the final image
 FROM alpine:latest
